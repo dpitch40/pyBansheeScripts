@@ -8,9 +8,6 @@ MusicDir = "/path/to/your/music/collection"
 MediaDir = "/media/user_name"
 # Name of the device in which playlists are stored
 BaseDevice = "ROOT"
-# Mappings from device names to slot numbers
-SlotNums = {"ROOT": 1,
-            "BRANCH": 2}
 
 
 
@@ -21,6 +18,9 @@ PlaylistsToSync = {
   "Playlist_Name_In_Banshee": ("ROOT", ('', ".m3u8", "/path/to/music"),
                                ["AlbumArtist", "Album", "Disc", "TrackNumber"]),
 }
+# Device order in which to load playlists--tracks existing on multiple playlists across
+# multiple devices will be synced to the device listed first in this list
+DeviceOrder = ["ROOT", "DEV2"]
 
 
 

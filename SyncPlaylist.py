@@ -70,13 +70,17 @@ def SyncPlaylist(trackListing, destDir, flat, delete, test):
     else:
         print "\n\nSyncing %d" % len(toSync)
 
-def exportAsXML(pName, tracks, baseDir):
+def exportAsXML(pName, tracks, baseDir, groupArtists):
     appData = list()
     trackList = list()
+    callBaseDir = callable(baseDir)
     for idx, track in enumerate(tracks):
+        if callBaseDir:
+            bd = baseDir(track)
+        else:
+            bd = baseDir
         loc = db_glue.sql2pathname(str(track['Uri']))
-        # loc = track.getDestName(baseDir.replace("__DEVICE__", track.extraData["Device"]), ga=False)
-        loc = track.getDestName(baseDir, ga=False)
+        loc = track.getDestName(bd, ga=groupArtists)
         xmlLoc = Util.pathname2xml(loc)
         trackStrs = ["\t\t<track>"]
         trackStrDict = [("location", xmlLoc),

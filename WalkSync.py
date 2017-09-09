@@ -45,7 +45,6 @@ Track.db = db
 stopEvent = threading.Event()
 
 PLAYLISTS_TO_SYNC = Config.PlaylistsToSync
-SlotNums = Config.SlotNums
 
 NONE = 0
 ERRORS = 1
@@ -512,33 +511,38 @@ def getTrackIDstoTracks(playlists):
 # Playlist syncing
 #------------------------------------------------------------------------------
 
-def genM3UPlaylist(playlist, baseDir, tracks):
+def genM3UPlaylist(playlist, baseDir, groupArtists, tracks):
     lines = ["#EXTM3U"]
+    callBaseDir = callable(baseDir)
     for track in tracks:
-        lines.append("#EXTINF:%d,%s - %s" % (track["Duration"]/1000, track["Artist"], track["Title"]))
-        lines.append(track.getDestName(baseDir, ga=False, asUnicode=True))
-    return "%s\n" % '\n'.join(lines)
-
-def genM3U8Playlist(playlist, baseDir, tracks):
-    lines = ["#EXTM3U"]
-    for track in tracks:
-        if baseDir.startswith("__DEV__"): # Special case for X5II playlists
-            slotNum = SlotNums[track.extraData["Device"]]
-            dest = track.getDestName(baseDir, ga=True, asUnicode=True)
-            dest = dest.replace("__DEV__", "TF%d:" % slotNum).replace('/', '\\')
-            lines.append(dest)
+        if callBaseDir:
+            bd = baseDir(track)
         else:
-            lines.append(track.getDestName(baseDir, ga=False, asUnicode=True))
+            bd = baseDir
+        lines.append("#EXTINF:%d,%s - %s" % (track["Duration"]/1000, track["Artist"], track["Title"]))
+        lines.append(track.getDestName(bd, ga=groupArtists, asUnicode=True))
     return "%s\n" % '\n'.join(lines)
 
-def genXSPFPlaylist(playlist, baseDir, tracks):
-    return SyncPlaylist.exportAsXML(playlist["Name"], tracks, baseDir)
+def genM3U8Playlist(playlist, baseDir, groupArtists, tracks):
+    lines = ["#EXTM3U"]
+    callBaseDir = callable(baseDir)
+    for track in tracks:
+        if callBaseDir:
+            bd = baseDir(track)
+        else:
+            bd = baseDir
+        lines.append(track.getDestName(bd, ga=groupArtists, asUnicode=True).replace('/', '\\'))
+    return "%s\n" % '\n'.join(lines)
+
+def genXSPFPlaylist(playlist, baseDir, groupArtists, tracks):
+    return SyncPlaylist.exportAsXML(playlist["Name"], tracks, baseDir, groupArtists)
 
 playlist_gens_by_ext = {".m3u": genM3UPlaylist,
                         ".m3u8": genM3U8Playlist,
                         ".xspf": genXSPFPlaylist}
 
-def playlistToText(playlist, protocolName, pExt, baseDir, sortOrder, trackIDsToTracks):
+def playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
+                   sortOrder, trackIDsToTracks):
     # Get tracks for this playlist
     if playlist["Smart"]:
         pl = "Smart"
@@ -562,7 +566,7 @@ WHERE cpe.%sPlaylistID = ?""" % (vo, pl, pl), (playlist["PlaylistID"],))
 
     playlistTracks.sort(key=operator.itemgetter(*sortOrder))
 
-    return playlist_gens_by_ext[pExt](playlist, baseDir, playlistTracks)
+    return playlist_gens_by_ext[pExt](playlist, baseDir, groupArtists, playlistTracks)
 
 def syncPlaylists(playlists, trackIDsToTracks, dryrun):
     # Mapping from destination playlist filenames to contents
@@ -572,14 +576,14 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
     for playlist in playlists:
         pDevice, protocols, sortOrder = PLAYLISTS_TO_SYNC[playlist["Name"]]
         for protocol in protocols:
-            protocolName, pExt, baseDir = protocol
+            protocolName, pExt, baseDir, groupArtists = protocol
 
             pDir = os.path.join(BASE_DIR, BASE_DEVICE, "Playlists%s" % protocolName)
             if pDir not in playlistDirs:
                 playlistDirs.append(pDir)
             pDest = os.path.join(pDir, "%s%s" % (playlist["Name"], pExt))
 
-            pText = playlistToText(playlist, protocolName, pExt, baseDir,
+            pText = playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
                                           sortOrder, trackIDsToTracks)
 
             pDest = pDest.encode(Config.UnicodeEncoding)
@@ -615,7 +619,7 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
 
             note("Updating playlist\t%s" % pDest)
 
-            if debugLevel == DEBUG:
+            if "Transient" in pDest:#debugLevel == DEBUG:
                 isJunk = lambda s: s.strip() == ''
                 matcher = difflib.SequenceMatcher(isjunk=isJunk, a=oldLines, b=newLines)
                 debug("Playlists are %.1f%% similar" % (matcher.ratio() * 100))
@@ -630,10 +634,10 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
                         if not blockStarted:
                             print
                             blockStarted = True
-                        print l
+                        debug(l)
                     else:
                         blockStarted = False
-                        print l
+                        debug(l)
 
 
             toSync.append(pDest)
@@ -705,7 +709,7 @@ def main():
     # Find the IDs of all the tracks to sync
     plNames = list()
     for pName, pInfo in sorted(PLAYLISTS_TO_SYNC.items(),
-                                key=lambda i: Config.SlotNums[i[1][0]]):
+                               key=lambda i: Config.DeviceOrder.index(i[1][0])):
         if pInfo[0] in allDevices:
             plNames.append(pName)
     playlists = get_playlists(plNames)

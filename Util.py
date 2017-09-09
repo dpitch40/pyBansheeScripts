@@ -201,12 +201,12 @@ def filterFname(f):
 
 # Wrapper function for filterFname that also handles the artist/album/song title
 # containing forward slashes
-# basedir is the top-level directory (assumed not to contain slashes)
+# basedir is the top-level directory (assumed not to contain forbidden characters)
 # elements is the list of path elementst hat may contain slashes; artist, album, title, etc.
 def filterPathElements(baseDir, elements):
     # Remove forward slashes in the path elements
     elements = [element.replace('/', '_') for element in elements]
-    return filterFname(os.path.join(baseDir, *elements))
+    return os.path.join(baseDir, filterFname(os.path.join(*elements)))
 
 # Returns the set of file names represented by the string path
 # If path is a list of filenames, reads it and returns the list
