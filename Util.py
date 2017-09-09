@@ -8,11 +8,15 @@ import operator
 import glob
 import re
 
+import db_glue
 from mutagen.mp3 import MP3
 from EasyID3Custom import EasyID3Custom as EasyID3
+from mutagen.oggvorbis import OggVorbis
+import Config
 
 forbiddenChars = ':;/\\!?*"<>|'
 forbiddenDirChars = ':;\\!?*"<>|'
+xmlEscapedChars = "'"
 translatetable = [chr(i) for i in xrange(0, 256)]
 for c in string.punctuation:
     translatetable[ord(c)] = '_'
@@ -23,9 +27,16 @@ for c in forbiddenChars:
     forbiddentable[ord(c)] = '_'
 forbiddentable = ''.join(forbiddentable)
 
+vorbisQuals = {-1: 45, 0: 64, 1: 80, 2: 96, 3: 112, 4: 128, 5: 160,
+               6: 192, 7: 224, 8: 256, 9: 320, 10: 500}
+
+def debug(msg, debug):
+    if debug:
+        print "DEBUG:\t%s" % msg
+
 # Takes the intersection of two lists of filenames: returns the files exclusive to the first,
 # the common names, and the names exclusive to the second.
-def compare_filesets(filelist1, filelist2):
+def compare_filesets(filelist1, filelist2, sort=False):
     #Turn all to lowercase and remove periods os.path.exists doesn't care about
     #these
     def demote(s):
@@ -33,28 +44,56 @@ def compare_filesets(filelist1, filelist2):
         prevDir, artistDir = os.path.split(prevDir)
         albumDir = os.path.basename(prevDir)
         fName, ext = os.path.splitext(fName)
-        return os.path.join(albumDir, artistDir, fName).lower().replace('.', '')
+        return os.path.join(albumDir, artistDir, "%s%s" % (fName, ext)).lower().replace('.', '')
     
     translatedfiles1 = dict(zip(map(demote, filelist1), filelist1))
     translatedfiles2 = dict(zip(map(demote, filelist2), filelist2))
-    on1not2 = [translatedfiles1[f] for f in 
-        set(translatedfiles1.keys()) - set(translatedfiles2.keys())]
-    on2not1 = [translatedfiles2[f] for f in 
-        set(translatedfiles2.keys()) - set(translatedfiles1.keys())]
-    common = [translatedfiles1[f] for f in 
-        set(translatedfiles1.keys()) & set(translatedfiles2.keys())]
-    return on1not2, common, on2not1
+    set1 = set(translatedfiles1.keys())
+    set2 = set(translatedfiles2.keys())
+    on1not2 = [translatedfiles1[f] for f in set1 - set2]
+    on2not1 = [translatedfiles2[f] for f in set2 - set1]
+    common = [translatedfiles1[f] for f in set1 & set2]
+    if sort:
+        return sorted(on1not2), sorted(common), sorted(on2not1)
+    else:
+        return on1not2, common, on2not1
 
-# Encodes the file at fname to an MP3 file at dest, using lame, at the specified bitrate.
-# 0 <= qual <= 9; lower is better quality (but longer encode time)
-def mp3encode(fname, dest, title,
-              artist=None, album=None, year=None, genre=None,
-              trackno=None, trackcount=None, disc=None, disccount=None,
-              bitrate=128, qual=2):
+def convertStrValue(v, convertNumbers=True):
+    if v == '' or v == "None" or v is None:
+        return None
+    elif isinstance(v, str):
+        if convertNumbers and v.isdigit():
+            return int(v)
+        else:
+            return unicode(v, Config.UnicodeEncoding)
+    else:
+        return v
+
+def encode(fName, dest, title,
+           artist=None, album=None, year=None, genre=None,
+           trackno=None, trackcount=None, disc=None, disccount=None,
+           bitrate=Config.DefaultBitrate):
+    ext = os.path.splitext(dest)[1].lower()
+    if ext == ".mp3":
+        func = mp3encode
+    elif ext == ".ogg":
+        func = oggencode
+    else:
+        raise ValueError, "No encoder defined for %s" % ext
     
     destDir = os.path.dirname(dest)
     if not os.path.exists(destDir):
         os.makedirs(destDir)
+
+    func(fName, dest, title, artist, album, year, genre,
+         trackno, trackcount, disc, disccount, bitrate)
+
+# Encodes the file at fname to an MP3 file at dest, using lame, at the specified bitrate.
+# 0 <= qual <= 9; lower is better quality (but longer encode time)
+def mp3encode(fname, dest, title,
+              artist, album, year, genre,
+              trackno, trackcount, disc, disccount,
+              bitrate, qual=Config.MP3Qual):
 
     # Set up arguments
     args = ["--noreplaygain", #Disable replaygain (don't want to mess up automated dynamics)
@@ -77,10 +116,7 @@ def mp3encode(fname, dest, title,
         args.extend(['--tg', genre])
 
     if fname.lower().endswith(".flac"):
-        # Special case for flac files
-        decoder = subprocess.Popen(["flac", "--decode", "--silent", "--stdout", fname],
-                        stdout=subprocess.PIPE)
-        decodedData, errs = decoder.communicate()
+        decodedData, errs = createFlacDecoder(fname)
         encoder = subprocess.Popen(["lame"] + args + ['-', dest], stdin=subprocess.PIPE)
         encoder.communicate(decodedData)
     else:
@@ -94,6 +130,60 @@ def mp3encode(fname, dest, title,
         else:
             mp3["discnumber"] = "%d" % disc
         mp3.save()
+
+# Encodes the file at fname to an OGG Vorbis file at dest, using oggenc
+# 0 <= qual <= 9; lower is better quality (but longer encode time)
+def oggencode(fname, dest, title,
+              artist, album, year, genre,
+              trackno, trackcount, disc, disccount,
+              bitrate, qual=None):
+    
+    if not qual:
+        qual = bitrateToVorbisQual(bitrate)
+    # Set up arguments
+    args = [ "--quiet", # silent
+             "-q", "%d" % qual,
+             '-t', title,
+             "-o", dest]
+    if artist:
+        args.extend(['-a', artist])
+    if album:
+        args.extend(['-l', album])
+    if year:
+        args.extend(['-d', str(year)])
+    if trackno:
+        args.extend(['-N', str(trackno)])
+    if genre:
+        args.extend(['-G', genre])
+
+    if fname.lower().endswith(".flac"):
+        decodedData, errs = createFlacDecoder(fname)
+        encoder = subprocess.Popen(["oggenc"] + args + ['-'], stdin=subprocess.PIPE)
+        encoder.communicate(decodedData)
+    else:
+        subprocess.call(["oggenc"] + args + [fname])
+
+    # oggenc doesn't accept disc number/count of track count as arguments;
+    # edit them after encoding
+    if disc or trackcount:
+        ogg = OggVorbis(dest)
+        if disc:
+            if disccount:
+                ogg["discnumber"] = "%d/%d" % (disc, disccount)
+            else:
+                ogg["discnumber"] = "%d" % disc
+        if trackcount:
+            ogg["tracknumber"] = "%d/%d" % (trackno, trackcount)
+        ogg.save()
+
+def createFlacDecoder(fName):
+    # Special case for flac files
+    decoder = subprocess.Popen(["flac", "--decode", "--silent", "--stdout", fName],
+                    stdout=subprocess.PIPE)
+    return decoder.communicate()
+
+def bitrateToVorbisQual(bitrate):
+    return max([q for q, b in sorted(vorbisQuals.items()) if b <= bitrate])
 
 # "Sanitizes" a filename: replaces forbidden characters and ending periods in directory names
 def filterFname(f):
@@ -139,3 +229,20 @@ def cautiousUpdate(d1, d2, overwriteOnNone=False):
     for k, v in d2.items():
         if k not in d1 or (overwriteOnNone and d1[k] is None):
             d1[k] = v
+
+def escapeXMLChars(s):
+    s = s.replace('&', "&amp;")
+    for c in xmlEscapedChars:
+        s = s.replace(c, "&#%d;" % ord(c))
+    return s
+# Similar to db_glue.pathname2sql, but converts a pathname for a VLC playlist
+def pathname2xml(path):
+    base = db_glue.pathname2sql(path)
+
+    decodeChars = ';'
+
+    base = escapeXMLChars(base)
+    for c in decodeChars:
+        base = base.replace("%%%02X" % ord(c), c)
+
+    return base

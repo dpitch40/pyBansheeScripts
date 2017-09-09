@@ -14,7 +14,7 @@ import Config
 
 db = db_glue.new(db_glue.defaultLoc)
 
-CD_DRIVE = Config["CDDriveLoc"]
+CD_DRIVE = Config.CDDriveLoc
 
 def Rip(tracks, test, bitRate, number, inputLocs):
     inputDirMapping = dict()
@@ -61,15 +61,18 @@ def Rip(tracks, test, bitRate, number, inputLocs):
 
 def RipTrack(track, test, bitRate, number, inputFile):
 
-    fullName = track.getDestName(Metadata.musicDir, number=number)
+    fullName = track.getDestName(Metadata.musicDir)
     prevName = track.get("Location", None)
+    if prevName is not None:
+        prevName = prevName.encode(Config.UnicodeEncoding)
 
     matched = int(prevName is not None and prevName == fullName)
     if matched:
         actions = ["%-2d  >>>" % track["TrackNumber"]]
     else:
         actions = ["%-2d" % track["TrackNumber"]]
-        print '\n%s\n%s\n' % (prevName, fullName)
+        print '\nExisting\t%s (%s) !=\nNew\t\t%s (%s)' % \
+                (prevName, type(prevName).__name__, fullName, type(fullName).__name__)
 
     fullNameSQL = db_glue.pathname2sql(fullName)
 
@@ -83,12 +86,14 @@ def RipTrack(track, test, bitRate, number, inputFile):
             changes.append(("Uri", fullNameSQL))
         actions.append(', '.join(["%s = %s" % c for c in changes]))
 
-    print "%s\n    %s\n    %s" % ('\t'.join(actions), '\n'.join(str(track).split('\n')),
+    # if prevName is None:
+    if inputFile:
+        track["Location"] = inputFile
+    print "%s\n    %s\n    Dest: %s" % ('\t'.join(actions), '\n'.join(str(track).split('\n')),
                 fullName)
 
     if not test:
-        # FIXME: streamline this in Track
-        track.MP3Encode(fullName, bitRate)
+        track.encode(fullName, bitRate)
 
         if track.matchedWithDB:
             fsize = os.path.getsize(fullName)
@@ -113,8 +118,6 @@ def main():
     Metadata.addDefaultArguments(parser)
 
     args = parser.parse_args()
-
-    Metadata.unicodeEncoding = args.unicodeencoding
 
     fNames, tracks = Metadata.getTracks(parser, args)
 

@@ -1,4 +1,4 @@
-import urllib
+import urllib2
 import sys
 import re
 import os.path
@@ -6,32 +6,16 @@ import Util
 import csv
 import StringIO
 import argparse
+import datetime
+from collections import defaultdict
+import Config
 
-tablenums =  {'metal-archives': 1,
-                 'allmusic': 0}
+from bs4 import BeautifulSoup
 
-titleindices = {'metal-archives': 1}
-
-rowlens = {'metal-archives': 4,
-              'allmusic': 5}
-
-searchstrs = {'allmusic': {'Artist': '<h3 class="album-artist"',
-                                    'Album': '<h2 class="album-title"',
-                                    'Date': '<h4>Release Date</h4>'},
-                  'metal-archives': {'Artist': 'class="band_name"',
-                                            'Album': 'class="album_name"',
-                                            'Date': '<dt>Release date:</dt>'}}
-
-#regex for an ordinal number, e.g. 3.
-ordre = re.compile(r'^[1-9]\d\.?$')
-#regex for an HTML tag, some tagless text, then the closing tag
-tagre = re.compile(r'<(\w+)( [^>]*)?>\s*([^<>]+)</\1', flags=re.MULTILINE)
-#regex for a year
-datere = re.compile(r'(\d{4})')
-#regex for flags
-flagre = re.compile(r'^[a-z]\d(?:,\d)*')
 #regex for times
 timeRe = re.compile(r"(\d+):(\d{2})")
+# regex for the domain name of a url
+urlRe = re.compile(r"www\.([^\.]+)\.")
 
 fieldOrdering = ["Title", "Artist", "AlbumArtist", "Album", "Genre", "Year", "Duration",
                     "TrackNumber", "TrackCount", "Disc", "DiscCount"]
@@ -39,7 +23,14 @@ fieldOrderingSet = set(fieldOrdering)
 
 strKeys = set(["Title", "Artist", "Album", "Genre", "AlbumArtist"])
 
-def parseTime(timeStr):
+hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
+       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+       # 'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+       # 'Accept-Encoding': 'gzip, deflate, sdch, br',
+       'Accept-Language': 'en-US,en;q=0.8',
+       'Connection': 'keep-alive'}
+
+def parseTimeStr(timeStr):
     if not isinstance(timeStr, str) and not isinstance(timeStr, unicode):
         return timeStr
     m = timeRe.match(timeStr)
@@ -51,122 +42,101 @@ def parseTime(timeStr):
     else:
         return None
 
-def formattime(mins, secs):
-    return "%d:%s" % (mins + secs/60, str(secs%60).zfill(2))
+###############################################################################
+# Track list from html
+###############################################################################
 
-def divide(html, tag):
-    st = '<%s' % tag
-    en = '</%s>' % tag
-    items = list()
-    startitem = html.find(st)
-    startitem = html.find('>', startitem) + 1
-    enditem = html.find(en, startitem)
-    while startitem > -1:
-        items.append(html[startitem:enditem].strip())
-        startitem = html.find(st, enditem)
-        if startitem > -1:
-            startitem = html.find('>', startitem) + 1
-            enditem = html.find(en, startitem)
-    return items
+domainParsers = dict()
+def registerParser(site):
+    def _inner(func):
+        domainParsers[site] = func
+        return func
+    return _inner
 
-def removetags(html):
-    els = list()
-    i = html.find('<')
-    if i > -1:
-        els.append(html[:i])
-        while i > -1:
-            j = html.find('>', i)
-            i = html.find('<', j)
-            if i > -1:
-                els.append(html[j+1:i])
-        els.append(html[j+1:])
-        return ''.join(els).strip()
-    else:
-        return html.strip()
+@registerParser("metal-archives")
+def parseMATracklist(soup):
+    albumInfo = soup.find(id="album_info")
+    album = albumInfo.find(class_="album_name").string
+    artist = albumInfo.find(class_="band_name").a.string
+    dateStr = albumInfo.find("dt", string="Release date:").find_next_sibling("dd").string
+    year = int(dateStr.rsplit(None, 1)[-1])
 
-def searchforelement(html, domain, elname, matchsame=False):
-    searchstr = searchstrs[domain][elname]
-    i = html.find(searchstr)
-    if not matchsame:
-        tag = tagre.search(html, i+len(searchstr)-1)
-    else:
-        tag = tagre.search(html, i-1)
-    return tag.group(3).strip()
+    songTable = soup.findAll("table", class_="table_lyrics")[0]
+    tracks = [(artist, album, year)]
+    discNum = None
+    for tableRow in songTable.findAll("tr"):
+        if tableRow.get("class", None) == ["discRow"]:
+            discNum = int(tableRow.stripped_strings.next().split()[1])
+        title = tableRow.find("td", class_="wrapWords")
+        if title is None:
+            continue
+        trackTitle = title.string.strip()
+        trackLen = parseTimeStr(title.find_next_sibling("td").string)
 
-def findtables(html):
-    htmlOrig = html.decode("latin")
-    html = html.lower().decode("latin")
-
-    tindex = html.find('<table')
-    captured = '<table'
-    start_block = tindex
-    t_level = 1
-    while tindex > -1:
-        next_start = html.find('<table', tindex + len(captured))
-        next_end = html.find('</table>', tindex + len(captured))
-        if next_start < next_end and next_start != -1:
-            tindex = next_start
-            if t_level == 0:
-                start_block = tindex
-            t_level += 1
-            captured = '<table'
+        if discNum is not None:
+            tracks.append((trackTitle, trackLen, discNum))
         else:
-            tindex = next_end
-            t_level -= 1
-            if t_level == 0:
-                yield htmlOrig[start_block:next_end+len('</table>')]
-            captured = '</table>'
-
-def getTrackListFromUrl(url):
-    f = urllib.urlopen(url)
-    html = f.read()
-    f.close()
-    domain = url[url.find('www.') + 4:].split('.', 1)[0]
+            tracks.append((trackTitle, trackLen))
     
-    artist = searchforelement(html, domain, 'Artist').replace("&amp;", '&')
-    album =  searchforelement(html, domain, 'Album', True).replace("&amp;", '&')
-    date = searchforelement(html, domain, 'Date')
-    m = datere.search(date)
-    if m:
-        year = m.group(1)
+    return tracks
+
+@registerParser("allmusic")
+def parseAllMusictracklist(soup):
+    releaseDateDiv = soup.find("div", class_="release-date")
+    releaseDateStr = releaseDateDiv.find("span").string
+    year = int(releaseDateStr.rsplit(None, 1)[-1])
+
+    artistH = soup.find("h2", class_="album-artist")
+    artist = artistH.stripped_strings.next()
+    albumH = artistH.find_next_sibling("h1")
+    album = albumH.stripped_strings.next()
+
+    tracks = [(artist, album, year)]
+
+    tracksSection = soup.find("section", class_="track-listing")
+    tBodies = list(tracksSection.findAll("tbody"))
+    hasMultipleDiscs = len(tBodies) > 1
+    for discNum, tBody in enumerate(tBodies):
+        for tableRow in tBody.findAll("tr"):
+            titleDiv = tableRow.find("div", class_="title")
+            title = titleDiv.stripped_strings.next()
+
+            timeDiv = tableRow.find("td", class_="time")
+            try:
+                trackLen = parseTimeStr(timeDiv.stripped_strings.next())
+            except StopIteration:
+                trackLen = 0
+
+            if hasMultipleDiscs:
+                tracks.append((title, trackLen, discNum+1))
+            else:
+                tracks.append((title, trackLen))
+
+    return tracks
+
+def parseTracklistFromUrl(url):
+    domain = urlRe.search(url).group(1).lower()
+    if domain not in domainParsers:
+        raise KeyError, "No parser defined for domain %r" % domain
+
+    result = None
+    request = urllib2.Request(url, headers=hdr)
+    f = urllib2.urlopen(request)
+    try:
+        html = f.read()
+    except:
+        raise
     else:
-        year = None
+        soup = BeautifulSoup(html, "lxml")
+        result = domainParsers[domain](soup)
+    finally:
+        f.close()
 
-    tables = list(findtables(html))
+    return result
 
-    tab = tables[tablenums[domain]]
-    tab = tab[tab.find('<tbody>') + 7:tab.rfind('</tbody>')]
-
-    rowstrings = divide(tab, 'tr')
-    rows = map(lambda x: map(removetags, divide(x, 'td')), rowstrings)
-    
-    tracklist = [(artist, album, year)]
-    curDiscNum = None
-    for r in rows:
-        if r[0].startswith("Disc"):
-            d, discNum = r[0].split()[:2]
-            curDiscNum = int(discNum)
-        elif len(r) == rowlens[domain] or (domain == 'allmusic' and len(r) > rowlens[domain]):
-            # print r
-            time = None
-            for e in reversed(r):
-                t = parseTime(e)
-                if t:
-                    time = e
-            if domain != 'allmusic':
-                title = r[titleindices[domain]]
-            else:
-                i = 0
-                while len(r[i]) == 0:
-                    i += 1
-                index = i + 1
-                title = r[index].split('\n', 1)[0].strip()
-            title = title.encode("latin").replace("&amp;", '&')
-            if curDiscNum is None:
-                tracklist.append((title, time))
-            else:
-                tracklist.append((title, time, curDiscNum))
-    return tracklist
+###############################################################################
+# Track list from text file
+###############################################################################
 
 def readSimpleTrackList(fname):
     """Reads a tracklist consisting of a row of metadata followed 
@@ -176,7 +146,7 @@ by rows of track data."""
         tracklist = [reader.next()]
         for row in reader:
             if len(row) > 1:
-                seconds = parseTime(row[1])
+                seconds = parseTimeStr(row[1])
                 if seconds is not None:
                     row[1] = seconds
                 else:
@@ -189,8 +159,131 @@ by rows of track data."""
             tracklist.append(row)
     return tracklist
 
-# Comparison function for field names in a track list
-def compareFields(a, b):
+# Reads a track list from a file
+def readAugmentedTrackList(fName):
+    with open(fName, 'r') as f:
+        reader = csv.DictReader(f)
+        tracklist = list()
+        for row in reader:
+            if "Duration" in row:
+                row["Duration"] = parseTimeStr(row["Duration"])
+            for k, v in row.items():
+                row[k] = Util.convertStrValue(v, k not in strKeys)
+            tracklist.append(row)
+    return tracklist
+
+###############################################################################
+# Common/tracklist manipulation functions
+###############################################################################
+
+# Changes a simple tracklist into a full one
+def augmentTrackList(trackList):
+    # Read initial metadata
+    firstRow = trackList[0]
+    trackList = trackList[1:]
+
+    artist = Util.convertStrValue(firstRow[0], False)
+    album = Util.convertStrValue(firstRow[1], False)
+    year = Util.convertStrValue(firstRow[2])
+    if len(firstRow) == 3:
+        genre = None
+    else:
+        genre = Util.convertStrValue(firstRow[3], False)
+
+    # Get max track and disc numbers
+    trackCounts = defaultdict(int)
+    maxDN = 0
+    for row in trackList:
+        if len(row) == 3:
+            disc = row[2]
+            maxDN = max(disc, maxDN)
+        else:
+            disc = None
+        trackCounts[disc] += 1
+
+    # Populate the table of dicts
+    lastDN = 1
+    curTN = 0
+    if maxDN == 0:
+        maxDN = None
+    augmentedTrackList = list()
+    for row in trackList:
+        title, time = row[:2]
+        if len(row) == 2:
+            disc = None
+        else:
+            disc = row[2]
+        time = parseTimeStr(time) * 1000 # Time in ms
+
+        # Update track number; if we have changed discs, reset it and update the disc number
+        curTN += 1
+        if disc and disc != lastDN:
+            curTN = 1
+            lastDN = disc
+
+        if not isinstance(title, unicode):
+            title = unicode(title, Config.UnicodeEncoding)
+        row =  {"Title": title,
+                "Artist": artist,
+                "AlbumArtist": artist,
+                "Album": album,
+                "Genre": genre,
+                "Year": year,
+                "Duration": time,
+                "TrackNumber": curTN,
+                "TrackCount": trackCounts[disc],
+                "Disc": disc,
+                "DiscCount": maxDN}
+
+        augmentedTrackList.append(row)
+
+    return augmentedTrackList
+
+# Reverse of augmentTrackList
+def simplifyTrackList(trackList):
+    firstRow = [trackList[0]["Artist"], trackList[0]["Album"], trackList[0]["Year"]]
+    genre = trackList[0]["Genre"]
+    if genre:
+        firstRow.append(genre)
+
+    rows = [firstRow]
+    for row in trackList:
+        simpleRow = [row["Title"], row["Duration"] / 1000]
+        if row["Disc"]:
+            simpleRow.append(row["Disc"])
+        rows.append(simpleRow)
+    return rows
+
+# Get a track list from a URL or file
+def getTrackList(loc, **kwargs):
+    if os.path.exists(loc):
+        if loc.endswith(".csv"):
+            tl = readAugmentedTrackList(loc)
+        else:
+            tl = readSimpleTrackList(loc)
+    else:
+        tl = parseTracklistFromUrl(loc)
+
+    # Convert kwargs
+    for k, v in kwargs.items():
+        kwargs[k] = Util.convertStrValue(v)
+    if isinstance(tl[0], dict):
+        map(lambda r: r.update(kwargs), tl)
+    else:
+        if "Genre" in kwargs and len(tl[0]) == 3:
+            tl[0] = tl[0] + (kwargs["Genre"],)
+
+    return tl
+
+# Gets a track list from the specified location; makes sure it is augmented
+def getAugmentedTrackList(loc, **kwargs):
+    tl = getTrackList(loc, **kwargs)
+    if not isinstance(tl[0], dict):
+        tl = augmentTrackList(tl)
+    return tl
+
+# Sort comparison function for field names in a track list
+def _compareFields(a, b):
     if a in fieldOrderingSet:
         if b in fieldOrderingSet:
             return fieldOrdering.index(a) - fieldOrdering.index(b)
@@ -201,141 +294,20 @@ def compareFields(a, b):
     else:
         return cmp(a, b)
 
-def convertStrValue(v, unicodeEncoding="utf-8", convertNumbers=True):
-    if v == '' or v is None:
-        return None
-    elif isinstance(v, str):
-        if convertNumbers and v.isdigit():
-            return int(v)
-        else:
-            return unicode(v, unicodeEncoding)
-    else:
-        return v
-
-# Reads a track list from a file
-def readTrackList(fName, unicodeEncoding):
-    with open(fName, 'r') as f:
-        reader = csv.DictReader(f)
-        tracklist = list()
-        for row in reader:
-            if "Duration" in row:
-                row["Duration"] = parseTime(row["Duration"])
-            for k, v in row.items():
-                row[k] = convertStrValue(v, unicodeEncoding, k not in strKeys)
-            tracklist.append(row)
-    return tracklist
-
-# Changes a simple tracklist into a full one
-def augmentTrackList(trackList, unicodeEncoding, **kwargs):
-    # Read initial metadata
-    firstRow = trackList[0]
-    if len(firstRow) == 3:
-        artist = convertStrValue(firstRow[0], unicodeEncoding, False)
-        album = convertStrValue(firstRow[1], unicodeEncoding, False)
-        year = convertStrValue(firstRow[2], unicodeEncoding)
-        genre = None
-    else:
-        artist = convertStrValue(firstRow[0], unicodeEncoding, False)
-        album = convertStrValue(firstRow[1], unicodeEncoding, False)
-        year = convertStrValue(firstRow[2], unicodeEncoding)
-        genre = convertStrValue(firstRow[3], unicodeEncoding, False)
-    trackList = trackList[1:]
-
-    for k, v in kwargs.items():
-        kwargs[k] = convertStrValue(v, unicodeEncoding)
-
-    # Get max track and disc numbers
-    trackCounts = dict()
-    maxDN = 0
-    curTN = 0
-    lastDN = 0
-    for row in trackList:
-        if len(row) == 3:
-            disc = row[2]
-            if disc > lastDN:
-                trackCounts[lastDN] = curTN
-                curTN = 0
-                lastDN = disc
-                maxDN = max(lastDN, maxDN)
-        curTN += 1
-    if maxDN or lastDN:
-        trackCounts[lastDN] = curTN
-    else:
-        maxDN = None
-        trackCounts[None] = curTN
-
-    # Populate the table of dicts
-    lastDN = 1
-    curTN = 0
-    augmentedTrackList = list()
-    for row in trackList:
-        if len(row) == 2:
-            title, time = row
-            disc = None
-        else:
-            title, time, disc = row
-        time = parseTime(time) * 1000
-
-        curTN += 1
-        dc = maxDN
-        if disc:
-            if disc != lastDN:
-                curTN = 1
-                lastDN = disc
-
-        row =  {"Title": unicode(title, unicodeEncoding),
-                  "Artist": artist,
-                  "AlbumArtist": artist,
-                  "Album": album,
-                  "Genre": genre,
-                  "Year": year,
-                  "Duration": time,
-                  "TrackNumber": curTN,
-                  "TrackCount": trackCounts[disc],
-                  "Disc": disc,
-                  "DiscCount": dc}
-
-        row.update(kwargs)
-        augmentedTrackList.append(row)
-
-    return augmentedTrackList
-
-# Get a track list from a URL or file
-def getTrackList(loc, unicodeEncoding="utf-8"):
-    if os.path.exists(loc):
-        if loc.endswith(".csv"):
-            tl = readTrackList(loc, unicodeEncoding)
-        else:
-            tl = readSimpleTrackList(loc)
-    # elif os.path.exists(os.path.join(Config.dropboxdir, loc)):
-    #    tl = readSimpleTrackList(os.path.join(Config.dropboxdir, loc))
-    else:
-        tl = getTrackListFromUrl(loc)
-
-    return tl
-
-def getAugmentedTrackList(loc, unicodeEncoding="utf-8", **kwargs):
-    tl = getTrackList(loc, unicodeEncoding)
-    simple = not loc.lower().endswith(".csv")
-    if simple:
-        tl = augmentTrackList(tl, unicodeEncoding, **kwargs)
-
-    return tl
-
 # Format a track list for printing
-def formatTrackList(trackList, unicodeEncoding, buf=None):
+def formatTrackList(trackList, buf=None):
     ioBuf = False
     if buf is None:
         buf = StringIO.StringIO()
         ioBuf = True
-    headers = sorted(trackList[0].keys(), cmp=compareFields)
+    headers = sorted(trackList[0].keys(), cmp=_compareFields)
     writer = csv.DictWriter(buf, headers, lineterminator='\n')
     writer.writeheader()
     for row in trackList:
         encodedRow = dict()
         for k, v in row.items():
             if isinstance(v, unicode):
-                encodedRow[k] = v.encode(unicodeEncoding)
+                encodedRow[k] = v.encode(Config.UnicodeEncoding)
             else:
                 encodedRow[k] = v
         writer.writerow(encodedRow)
@@ -347,96 +319,35 @@ if __name__ == '__main__':
     parser.add_argument("location", help="The location (URL or file) to get metadata from.")
     parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
                                 help="Specify extra data fields for these tracks.")
-    parser.add_argument('-u', "--unicodeencoding", help="Specify a unicode encoding to use.",
-                                default="utf-8")
     parser.add_argument('-o', "--out", help="Output to a file.")
     parser.add_argument('-s', "--simple", action="store_true",
                 help="Use the simple tracklist format.")
     args = parser.parse_args()
 
-    tl = getTrackList(args.location, args.unicodeencoding)
+    tl = getTrackList(args.location, **dict(args.extra))
+    simpleTracklist = not isinstance(tl[0], dict)
 
-    simple = not args.location.lower().endswith(".csv")
-    if simple and not args.simple:
-        tl = augmentTrackList(tl, args.unicodeencoding, **dict(args.extra))
-
-        # for row in table:
-        #    print row
-        if args.out:
-            with open(args.out, 'w') as f:
-                formatTrackList(tl, args.unicodeencoding, f)
-        else:
-            print formatTrackList(tl, args.unicodeencoding).strip()
-    else:
+    if args.simple:
+        if not simpleTracklist:
+            tl = simplifyTrackList(tl)
+        def encodeRowElement(r):
+            if isinstance(r, unicode):
+                return r.encode(Config.UnicodeEncoding)
+            else:
+                return r
+        tl = map(lambda row: map(encodeRowElement, row), tl)
         if args.out:
             with open(args.out, 'w') as f:
                 writer = csv.writer(f, delimiter='\t', lineterminator='\n')
                 writer.writerows(tl)
         else:
             print '\n'.join(['\t'.join(map(str, l)) for l in tl])
+    else:
+        if simpleTracklist: # Augment the tracklist
+            tl = augmentTrackList(tl)
 
-# def readtrackrow(rowstr):
-#    #FIXME: Do times need to delineated by tabs?
-#    #Filter out track numbers
-#    if '\t' in rowstr:
-#       items = rowstr.split(None, 1)
-#       if ordre.match(items[0].strip()):
-#          line = items[1]
-#       else:
-#          line = rowstr
-#       title, items = line.split('\t', 1)
-#    else:
-#       title = rowstr
-#       items = ''
-    
-#    #Remove quotes from around title
-    
-#    items = items.split()
-    
-#    time = None
-#    if len(items) > 0:
-#       time = parseTime(items[0])
-#       if not time:
-#          for i in xrange(1, len(items)):
-#             time = parseTime(items[i])
-#             if time:
-#                break
-#    if len(items) == 2:
-#       discNum = int(items[1])
-#       return (title, time, discNum)
-#    else:
-#       return (title, time)
-
-# def writeextendedtracklist(fname, flags, metadata, tracklist):
-#    """The inverse of readextendedtracklist."""
-#    print tracklist
-#    f = open(fname, 'w')
-#    s = '\t'.join(["%s%s" % (k, ','.join(map(str, v))) for k, v in flags.items()])
-#    s = '%s\n%s' % (s, '\t'.join(map(str, metadata)))
-#    s = '%s\n%s' % (s, '\n'.join(["%s\t%s" % (title, formattime(0, time)) for title, time in tracklist]))
-#    f.write(s)
-#    f.close()
-#    return s
-
-# def readextendedtracklist(fname):
-#    """Read an "extended" tracklist consisting of flags on the first line,
-#       metadata on the second, and then a track on each line after that. Returns
-#       the flags as a dict, the metadata. and the tracklist, as a 3-tuple."""
-#    f = open(fname, 'r')
-#    line = f.readline().strip()
-#    if line == '':
-#       line = f.readline().strip()
-#    flags = dict()
-#    if datere.search(line):
-#       metadata = line.split('\t')
-#    else:
-#       for s in line.split():
-#          if len(s) > 1:
-#             flags[s[0]] = map(int, s[1:].split(','))
-#          else:
-#             flags[s] = []
-#       metadata = f.readline().strip().split('\t')
-#    tracklist = list()
-#    for line in f.readlines():
-#       tracklist.append(readtrackrow(line.strip()))
-#    return (flags, metadata, tracklist)
+        if args.out:
+            with open(args.out, 'w') as f:
+                formatTrackList(tl, f)
+        else:
+            print formatTrackList(tl).strip()

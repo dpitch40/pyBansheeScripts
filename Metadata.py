@@ -8,12 +8,13 @@ import Util
 import operator
 import re
 import csv
+import itertools
+import collections
 import KeyGen
+import Config
+Config.GroupArtists = False
 import Track
 from Track import TRACKLIST, DB, FILE
-import Config
-
-global unicodeEncoding
 
 db = db_glue.new(db_glue.defaultLoc)
 Track.db = db
@@ -23,42 +24,36 @@ trackNumRe = re.compile(r"^(?:(\d)\-)?(\d{1,2})(.+)\.(\w{2,4})$")
 
 LENGTH_UPDATE_THRESHOLD_MS = 600
 
-# Creates mappings from TrackID/(dn, tn)/(title, artist, album) tuples to MP3s
-def CreateTrackMapping(destFiles):
-    trackMapping = dict()
-    for df in destFiles:
-        track = Track.Track.fromDB(df, unicodeEncoding=unicodeEncoding)
-        trackMapping[df] = track
+def ExtractKeys(track, discLens=None):
+    keys = list()
+    album, artist, title, tn, dn = track["Album"], track["Artist"], track["Title"], \
+                                    track["TrackNumber"], track["Disc"]
+
+    if track["Location"]:
+        keys.append(track["Location"])
+
         audio = track.audio
+        if audio:
+            if tn is None and "tracknumber" in audio:
+                tn = audio["tracknumber"][0]
+                if '/' in tn:
+                    tn = int(tn.split('/')[0])
+                else:
+                    tn = int(tn)
+            if dn is None and "discnumber" in audio:
+                dn = audio["discnumber"][0]
+                if '/' in dn:
+                    dn = int(dn.split('/')[0])
+                else:
+                    dn = int(dn)
+            if title is None and "title" in audio:
+                title = audio["title"][0]
+            if artist is None and "artist" in audio:
+                artist = audio["artist"][0]
+            if album is None and "album" in audio:
+                album = audio["album"][0]
 
-        if track.matchedWithDB:
-            trackMapping[track["TrackID"]] = track
-
-        tn = None
-        dn = None
-        title = None
-        artist = None
-        album = None
-        if "tracknumber" in audio:
-            tn = audio["tracknumber"][0]
-            if '/' in tn:
-                tn = int(tn.split('/')[0])
-            else:
-                tn = int(tn)
-        if "discnumber" in audio:
-            dn = audio["discnumber"][0]
-            if '/' in dn:
-                dn = int(dn.split('/')[0])
-            else:
-                dn = int(dn)
-        if "title" in audio:
-            title = audio["title"][0]
-        if "artist" in audio:
-            artist = audio["artist"][0]
-        if "album" in audio:
-            album = audio["album"][0]
-
-        d, baseName = os.path.split(df)
+        d, baseName = os.path.split(track["Location"])
         d, albumDir = os.path.split(d)
         artistDir = os.path.basename(d)
         m = trackNumRe.match(baseName)
@@ -71,78 +66,106 @@ def CreateTrackMapping(destFiles):
                 tn = tnF
             if not dn:
                 dn = dnF
-        if not artist:
-            artist = artistDir
-        if not album:
-            album = albumDir
-        if not title:
-            title = titleF
 
-        if tn not in (0, None):
-            trackMapping[(dn, tn)] = track
-        trackMapping[(title, artist, album)] = track
-    # print trackMapping.keys()
+            if not artist:
+                artist = artistDir
+            if not album:
+                album = albumDir
+            if not title:
+                title = titleF
+
+    if tn not in (0, None):
+        keys.append((dn, tn))
+        if dn and discLens is not None:
+            keys.append((None, tn + sum([c for d, c in discLens.items() if d < dn])))
+    if title:
+        keys.append((title, artist, album))
+
+    if track.matchedWithDB:
+        keys.append(track["TrackID"])
+
+    return keys
+
+# Creates mappings from TrackID/(dn, tn)/(title, artist, album) tuples to MP3s
+def CreateTrackMapping(tracks):
+    trackMapping = dict()
+    dupKeys = set()
+
+    # Make mapping from disc number to number of tracks on the disc
+    discLens = collections.defaultdict(int)
+    for track in tracks:
+        dn = track["Disc"]
+        if dn:
+            discLens[dn] += 1
+
+    for track in tracks:
+        possKeys = ExtractKeys(track, discLens)
+        
+        # Ensure each mapping key is unique across all tracks
+        for k in possKeys:
+            if k in dupKeys:
+                continue
+            elif k in trackMapping:
+                del trackMapping[k]
+                dupKeys.add(k)
+            else:
+                trackMapping[k] = track
+
     return trackMapping
 
 # Edits tracks
-def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
+def Edit(tracks, destFiles, test, matchWithDB, relocate):
     edited = 0
 
+    # Are we getting the metadata from a source apart from the files themselves
     extSource = destFiles is not None
     if extSource:
-        # Create a mapping from destFiles to tracks
-        trackMapping = CreateTrackMapping(destFiles)
+        destTracks = [Track.Track.fromDB(f) for f in destFiles]
+        # trackMapping = CreateTrackMapping(destFiles)
 
     # Remove album artist if it is equal to the artist for all tracks
     firstArtist = tracks[0]["Artist"]
     nullAlbumArtist = all(t["Artist"] == firstArtist for t in tracks) and \
         all(t["AlbumArtist"] in (None, firstArtist) for t in tracks)
 
-    # dns = set(track["Disc"] for track in tracks)
-    # oneDisc = len(dns) == 1
-    discLens = {0: 0}
-    for track in tracks:
-        dn = track["Disc"]
-        if dn in discLens:
-            discLens[dn] += 1
-        else:
-            discLens[dn] = 1
+    trackMapping = CreateTrackMapping(tracks)
 
-    for track in tracks:
+    # print "trackMapping keys =\n%s\n" % '\n'.join(map(str, sorted(trackMapping.keys())))
+
+    if extSource:
+        def matchTrack(track):
+            matchKeys = ExtractKeys(track)
+            for k in matchKeys:
+                if k in trackMapping:
+                    return matchKeys, track, trackMapping[k]
+            return matchKeys, track, None
+        trackItr = itertools.imap(matchTrack, sorted(destTracks,
+                key=lambda t: (t["Disc"], t["TrackNumber"], t["Artist"], t["Album"])))
+    else:
+        trackItr = zip([None] * len(tracks), [None] * len(tracks), tracks)
+
+    totalCount = 0
+    overwritten = 0
+    for keys, destTrack, origTrack in trackItr:
+        totalCount += 1
         if extSource:
-            tnInfo = (track["Disc"], track["TrackNumber"])
-            if track["Disc"] is not None:
-                altTnInfo = (None, track["TrackNumber"] + 
-                            sum([discLens.get(dn+1, 0) for dn in xrange(track["Disc"] - 1)]))
-            else:
-                altTnInfo = (None, track["TrackNumber"])
-            titleInfo = (track["Title"], track["Artist"], track["Album"])
-            if track.matchedWithDB and track["TrackID"] in trackMapping:
-                destTrack = trackMapping[track["TrackID"]]
-            elif track["Location"] in trackMapping:
-                destTrack = trackMapping[track["Location"]]
-            elif tnInfo in trackMapping:
-                destTrack = trackMapping[tnInfo]
-            # elif oneDisc and altTnInfo in trackMapping:
-            elif altTnInfo in trackMapping:
-                destTrack = trackMapping[altTnInfo]
-            elif titleInfo in trackMapping:
-                destTrack = trackMapping[titleInfo]
-            else:
-                print "*** ERROR on %s: could not match with destination file %s %s %s" % \
-                    (track.name, tnInfo, titleInfo, altTnInfo)
-                print '\n'.join(map(str, sorted(trackMapping.keys())))
+            if origTrack is None:
+                print "*** ERROR on %s: could not match with track list keys=(%s)" \
+                                % (destTrack.name, ', '.join(map(str, keys)))
                 continue
             audio = destTrack.audio
+            track = origTrack
             Util.cautiousUpdate(track, destTrack, overwriteOnNone=True)
         else:
-            audio = track.audio
-
+            audio = origTrack.audio
+            track = origTrack
+        
         fileChanges = dict()
         dbChanges = dict()
         relocated = None
 
-        fileChanges = SyncTrackToFile(track, audio, nullAlbumArtist)
+        if audio:
+            fileChanges = SyncTrackToFile(track, audio, nullAlbumArtist)
         if not track.matchedWithDB:
             if matchWithDB:
                 print "* WARNING on %s: could not match with DB" % track.name
@@ -151,13 +174,21 @@ def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
             dbChanges = SyncTrackToDB(track)
 
         # Relocate
-        curName = audio.filename.decode(unicodeEncoding)
+        if audio:
+            curName = audio.filename
+        elif extSource:
+            curName = destTrack["Location"]
+        else:
+            curName = track["Location"]
+        if isinstance(curName, str):
+            curName = curName.decode(Config.UnicodeEncoding)
+
         if track["Location"] != curName:
             newName = track["Location"]
         else:
             base, ext = os.path.splitext(os.path.basename(curName))
             
-            newName = track.getDestName(musicDir, ext, number)
+            newName = track.getDestName(musicDir, ext)
 
         if curName != newName and relocate:
             relocated = (curName, newName)
@@ -169,15 +200,16 @@ def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
                 newBase, newD = os.path.split(newBase)
                 newDiff = os.path.join(newD, newDiff)
 
-            oldDiff = os.path.join("...", oldDiff).encode(unicodeEncoding)
-            newDiff = os.path.join("...", newDiff).encode(unicodeEncoding)
+            oldDiff = os.path.join("...", oldDiff).encode(Config.UnicodeEncoding)
+            newDiff = os.path.join("...", newDiff)#.encode(Config.UnicodeEncoding)
 
             if track.matchedWithDB:
                 oldUri = db.sql("SELECT Uri FROM CoreTracks WHERE TrackID = ?",
                             (track["TrackID"],))[0]["Uri"]
             else:
                 oldUri = ''
-            newUri = db_glue.pathname2sql(newName.encode(unicodeEncoding))
+
+            newUri = db_glue.pathname2sql(newName)#.encode(Config.UnicodeEncoding))
             dbChanges["Uri"] = (db_glue.pathname2sql(oldDiff)[7:], db_glue.pathname2sql(newDiff)[7:])
 
         if fileChanges or dbChanges or relocated:
@@ -194,6 +226,7 @@ def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
                 m = "  Relocating from %s to %s" % (oldDiff, newDiff)
                 if os.path.exists(newName):
                     m += " (overwriting existing file)"
+                    overwritten += 1
                 print m
             if "BitRate" in fileChanges:
                 print "  Reencoding from %d to %d bps" % (fileChanges["BitRate"])
@@ -202,7 +235,8 @@ def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
             edited += 1
 
             if not test:
-                audio.save()
+                if audio:
+                    audio.save()
 
                 if track.matchedWithDB:
                     db.commit()
@@ -221,10 +255,13 @@ def Edit(tracks, destFiles, test, number, matchWithDB, relocate):
                         pass
 
                 if "BitRate" in fileChanges:
-                    track.MP3Encode(track["Location"],
-                                    fileChanges["BitRate"][1] / 1000, number)
+                    track.encode(track["Location"],
+                                 fileChanges["BitRate"][1] / 1000)
 
-    print "\n%d/%d edited" % (edited, len(tracks))
+    status = "\n%d/%d edited" % (edited, totalCount)
+    if overwritten:
+        status = "%s (%s overwritten)" % (status, overwritten)
+    print status
 
 # Saves a track list to Album.csv
 def Save(tracks, outName="Album.csv"):
@@ -242,9 +279,9 @@ def Save(tracks, outName="Album.csv"):
             for k in headers:
                 v = track[k]
                 if k is not None and isinstance(k, unicode):
-                    k = k.encode(unicodeEncoding)
+                    k = k.encode(Config.UnicodeEncoding)
                 if v is not None and isinstance(v, unicode):
-                    v = v.encode(unicodeEncoding)
+                    v = v.encode(Config.UnicodeEncoding)
                 dl.append((k, v))
             writer.writerow(dict(dl))
 
@@ -365,8 +402,6 @@ def addDefaultArguments(parser):
                         help="Only preview changes, do not actually make them.")
     parser.add_argument("--help-tags", action="store_true",
                         help="Display the EasyID3 tags that can be viewed or edited.")
-    parser.add_argument('-u', "--unicodeencoding", help="Specify a unicode encoding to use.",
-                        default="utf-8")
     parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
                         help="Specify extra data fields for tracks loaded from an external source.")
     parser.add_argument("source", nargs='?',
@@ -388,33 +423,35 @@ def getTracks(parser, args):
         for f in args.files:
             fNames.extend(Util.expandPath(f))
     else:
-        if args.action == "edit":
+        if getattr(args, "action", '') == "edit":
             print "ERROR: Must specify files to edit."
             parser.print_help()
             return
         fNames = None
 
-    unicodeEncoding = args.unicodeencoding
     extraDict = dict(args.extra)
     for k, v in extraDict.items():
-        extraDict[k] = ParseTables.convertStrValue(v, unicodeEncoding)
+        extraDict[k] = Util.convertStrValue(v)
 
-    if args.source in ("db", "files"):
+    if args.source in ("db", "files", "dbonly", "filesonly"):
         if args.source == "db":
-            tracks = [Track.Track([TRACKLIST, DB, FILE], fn, unicodeEncoding, **extraDict) for fn in fNames]
+            sources = [TRACKLIST, DB, FILE]
+        elif args.source == "dbonly":
+            sources = [TRACKLIST, DB]
         elif args.source == "files":
-            tracks = [Track.Track([TRACKLIST, FILE, DB], fn, unicodeEncoding, **extraDict) for fn in fNames]
+            sources = [TRACKLIST, FILE, DB]
+        elif args.source == "filesonly":
+            sources = [TRACKLIST, FILE]
+        tracks = [Track.Track(sources, fn, **extraDict) for fn in fNames]
         fNames = None
     else:
-        tl = ParseTables.getAugmentedTrackList(args.source, args.unicodeencoding, **extraDict)
-        tracks = [Track.Track.fromTrackList(t, unicodeEncoding) for t in tl]
+        tl = ParseTables.getAugmentedTrackList(args.source, **extraDict)
+        tracks = [Track.Track([Track.TRACKLIST, Track.DB], None, **t) for t in tl]
     tracks.sort(key=operator.itemgetter("Artist", "Album", "Disc", "TrackNumber"))
 
     return fNames, tracks
 
 def main():
-    global unicodeEncoding
-
     actionChoices = ["view", "edit", "save"]
 
     progDesc = """View and edit the metadata of music files. Can be used to make changes
@@ -427,8 +464,6 @@ to files and/or synchronize metadata between files and the database."""
                         help="When viewing, use repr() to display rather than str().")
     parser.add_argument("--noreloc", dest="reloc", action="store_false",
                         help="Disable automatic relocation of files.")
-    parser.add_argument('-n', "--nonumber", action="store_false", dest="number",
-                        help="Do not use track/disc numbers when determining track names.")
     parser.add_argument("action", nargs='?', choices=actionChoices, help="The action to take.")
     addDefaultArguments(parser)
 
@@ -438,11 +473,10 @@ to files and/or synchronize metadata between files and the database."""
         parser.print_help()
         return
 
-    unicodeEncoding = args.unicodeencoding
     fNames, tracks = getTracks(parser, args)
 
     if args.action == "edit":
-        Edit(tracks, fNames, args.test, args.number, args.matchwithdb, args.reloc)
+        Edit(tracks, fNames, args.test, args.matchwithdb, args.reloc)
     elif args.action == "view":
         View(tracks, args.use_repr)
     else:
