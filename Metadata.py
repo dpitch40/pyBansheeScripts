@@ -188,7 +188,7 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
         else:
             base, ext = os.path.splitext(os.path.basename(curName))
             
-            newName = track.getDestName(musicDir, ext)
+            newName = track.getDestName(musicDir, ext, asUnicode=True)
 
         if curName != newName and relocate:
             relocated = (curName, newName)
@@ -201,7 +201,7 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
                 newDiff = os.path.join(newD, newDiff)
 
             oldDiff = os.path.join("...", oldDiff).encode(Config.UnicodeEncoding)
-            newDiff = os.path.join("...", newDiff)#.encode(Config.UnicodeEncoding)
+            newDiff = os.path.join("...", newDiff).encode(Config.UnicodeEncoding)
 
             if track.matchedWithDB:
                 oldUri = db.sql("SELECT Uri FROM CoreTracks WHERE TrackID = ?",
@@ -209,7 +209,7 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
             else:
                 oldUri = ''
 
-            newUri = db_glue.pathname2sql(newName)#.encode(Config.UnicodeEncoding))
+            newUri = db_glue.pathname2sql(newName.encode(Config.UnicodeEncoding))
             dbChanges["Uri"] = (db_glue.pathname2sql(oldDiff)[7:], db_glue.pathname2sql(newDiff)[7:])
 
         if fileChanges or dbChanges or relocated:

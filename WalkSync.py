@@ -632,7 +632,6 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
                     l = line.strip()
                     if line.startswith('-'):
                         if not blockStarted:
-                            print
                             blockStarted = True
                         debug(l)
                     else:
