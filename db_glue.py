@@ -73,18 +73,41 @@ class DB:
     
     def pack_rows(self, desc, rows):
         result = list()
-        r = xrange(len(desc))
         for row in rows:
-            result.append(dict(((desc[i][0], row[i]) for i in r)))
+            result.append(dict(((desc[i][0], row[i]) for i in range(len(desc)))))
         return result
+
+    def preview_sql(self, sqlstr, *args, **kwargs):
+        quoted_args = []
+        quoted_kwargs = {}
+
+        for v in args:
+            quoted_args.append(self._quote_value(v))
+
+        for k, v in kwargs.items():
+            quoted_kwargs[k] = self._quote_value(v)
+
+        for quoted in quoted_args:
+            sqlstr = sqlstr.replace('?', quoted, 1)
+        for k, quoted in quoted_kwargs.items():
+            sqlstr = sqlstr.replace(':%s' % k, quoted)
+
+        return sqlstr
+
+    def _quote_value(self, value):
+        self.curs.execute("SELECT quote(?)", (value,))
+        quoted = self.curs.fetchone()[0]
+        return str(quoted)
     
-    def sql(self, sqlstr, parms={}, debug=False):
+    def sql(self, sqlstr, *args, **kwargs):
         """Executes the sql in the string, returns results (if any) as a list of
-            dicts.
-            debug: If true, prints the sql string."""
-        if debug:
-            print '\n' + sqlstr
-            print str(parms)
+            dicts."""
+        if args and kwargs:
+            raise ValueError("Cannot specify both args and kwargs")
+        if args:
+            parms = args
+        else:
+            parms = kwargs
         
         self.curs.execute(sqlstr, parms)
         if (self.curs.description is None):
