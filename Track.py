@@ -227,13 +227,13 @@ class Track(object):
         
         # Find track in DB
         if trackID:
-            rows = db.sql(selectStmt % "ct.TrackID = ?", (trackID,))
+            rows = db.sql(selectStmt % "ct.TrackID = ?", trackID)
         else:
             rows = list()
             # First try to match by URI, then by artist/album/title
             if fName:
                 uri = db_glue.pathname2sql(fName)
-                rows = db.sql(selectStmt % "ct.Uri = ?", (uri,))
+                rows = db.sql(selectStmt % "ct.Uri = ?", uri)
             if not rows:
                 artist = kwargs.get("Artist", '')
                 album = kwargs.get("Album", '')
@@ -248,7 +248,7 @@ class Track(object):
                     if "title" in audio:
                         title = audio["title"][0]
                 rows = db.sql(selectStmt % "ca.Name = ? AND cl.Title = ? AND ct.Title = ?",
-                            (artist, album, title))
+                            artist, album, title)
 
         self.matchedWithDB = len(rows) > 0
         if self.matchedWithDB:

@@ -77,7 +77,7 @@ def RipTrack(track, test, bitRate, number, inputFile):
     fullNameSQL = db_glue.pathname2sql(fullName)
 
     if track.matchedWithDB:
-        rows = db.sql("SELECT BitRate, Uri FROM CoreTracks WHERE TrackID = ?", (track["TrackID"],))
+        rows = db.sql("SELECT BitRate, Uri FROM CoreTracks WHERE TrackID = ?", track["TrackID"])
         row = rows[0]
         changes = list()
         if row["BitRate"] != bitRate:
@@ -101,7 +101,7 @@ def RipTrack(track, test, bitRate, number, inputFile):
             changeNames, changeVals = zip(*changes)
             db.sql("UPDATE CoreTracks SET %s WHERE TrackID = ?" %
                     ', '.join(["%s = ?" % cn for cn in changeNames]),
-                        tuple(changeVals) + (track["TrackID"],))
+                        *(tuple(changeVals) + (track["TrackID"],)))
             # print "Updated database\tBitrate=%d\tFileSize=%d\tUri=%s" % (bitrate, fsize, fullNameSQL)
     return matched
 
@@ -119,7 +119,7 @@ def main():
 
     args = parser.parse_args()
 
-    fNames, tracks = Metadata.getTracks(parser, args)
+    fNames, tracks = Metadata.getTracks(parser, args, integrateChanges=True)
 
     Rip(tracks, args.test, args.bitrate, args.number, args.input)
 

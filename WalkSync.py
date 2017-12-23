@@ -331,10 +331,10 @@ def get_playlists(names):
     for name in names:
         smart = False
         #Get the listings of playlists
-        rows = db.sql("SELECT Name, PlaylistID FROM CorePlaylists WHERE Name = ?", (name,))
+        rows = db.sql("SELECT Name, PlaylistID FROM CorePlaylists WHERE Name = ?", name)
         if not rows:
             rows = db.sql("SELECT Name, SmartPlaylistID AS PlaylistID "
-                          "FROM CoreSmartPlaylists WHERE Name = ?", (name,))
+                          "FROM CoreSmartPlaylists WHERE Name = ?", name)
             smart = True
         # for r in sorted(rows, key=lambda r: names.index(r["Name"])):
         if not rows:
@@ -379,7 +379,7 @@ def getTracksByPlaylist(playlist, useDB):
           CoreAlbums cl ON ct.AlbumID = cl.AlbumID,
           CoreArtists ca ON ct.ArtistID = ca.ArtistID
     WHERE cpe.%sPlaylistID = ?
-    ORDER BY Artist, Album, Disc, TrackNumber""" % (vo, pl, pl), (playlist["PlaylistID"],))
+    ORDER BY Artist, Album, Disc, TrackNumber""" % (vo, pl, pl), playlist["PlaylistID"])
 
     albumArtists = dict()
     for r in rows:
@@ -430,7 +430,7 @@ def findSingletons(db, playlist, rows, albumArtists):
             # Get info on all the tracks in this album and in the playlist
             byTrackInfo = db.sql("""SELECT ct.TrackID, ct.TrackCount, ct.Disc, ct.DiscCount
 FROM CoreTracks ct JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID
-WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), (albumID, playlistID))
+WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), albumID, playlistID)
             c += len(byTrackInfo)
 
             # Get album title
@@ -451,7 +451,7 @@ WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), (albumID, playlistI
                     args = (albumID, disc, playlistID)
                 # Check how many songs from this disc are in the playlist
                 discCountOnPL = db.sql("""SELECT COUNT(*) as c FROM CoreTracks ct
-JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID WHERE %s""" % (pl, where), args)[0]['c']
+JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID WHERE %s""" % (pl, where), *args)[0]['c']
 
                 # Consider this album a "full album" if any of its discs has all its tracks
                 # represented in the playlist, or it if the count is "close enough")
@@ -553,9 +553,9 @@ def playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
     rows = db.sql("""SELECT ct.TrackID AS TrackID%s
 FROM CoreTracks ct
 JOIN Core%sPlaylistEntries cpe ON ct.TrackID = cpe.TrackID
-WHERE cpe.%sPlaylistID = ?""" % (vo, pl, pl), (playlist["PlaylistID"],))
+WHERE cpe.%sPlaylistID = ?""" % (vo, pl, pl), playlist["PlaylistID"])
     if not rows:
-        return [('', '')]
+        return ''
 
     playlistTracks = list()
     for r in rows:
@@ -574,9 +574,9 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
     # Set of parent directories of the playlists
     playlistDirs = list()
     for playlist in playlists:
-        pDevice, protocols, sortOrder = PLAYLISTS_TO_SYNC[playlist["Name"]]
+        pDevice, protocols = PLAYLISTS_TO_SYNC[playlist["Name"]]
         for protocol in protocols:
-            protocolName, pExt, baseDir, groupArtists = protocol
+            protocolName, pExt, baseDir, groupArtists, sortOrder = protocol
 
             pDir = os.path.join(BASE_DIR, BASE_DEVICE, "Playlists%s" % protocolName)
             if pDir not in playlistDirs:
@@ -586,8 +586,9 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
             pText = playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
                                           sortOrder, trackIDsToTracks)
 
-            pDest = pDest.encode(Config.UnicodeEncoding)
-            playlistTexts[pDest] = pText
+            if pText:
+                pDest = pDest.encode(Config.UnicodeEncoding)
+                playlistTexts[pDest] = pText
 
     # Get list of playlists already on drive
     curPlaylists = list()
@@ -604,7 +605,8 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
     # Playlists to add
     toSyncTexts = list()
     for pDest in toSync:
-        toSyncTexts.append(playlistTexts[pDest])
+        text = playlistTexts[pDest]
+        toSyncTexts.append(text)
         note("Syncing playlist\t%s" % pDest)
 
     # Playlists to update

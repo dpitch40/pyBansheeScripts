@@ -88,12 +88,13 @@ def exportAsXML(pName, tracks, baseDir, groupArtists):
                         ("creator", Util.escapeXMLChars(track["Artist"])),
                         ("album", Util.escapeXMLChars(track["Album"])),
                         ("trackNum", "%d" % track["TrackNumber"]),
-                        ("duration", "%d" % track["Duration"])]
+                        # ("duration", "%d" % track["Duration"])
+                       ]
         trackStrs.extend(["\t<%s>%s</%s>" % (k, v, k) for k, v in trackStrDict])
         trackStrs.extend([
-            '\t<extension application="http://www.videolan.org/vlc/playlist/0">',
-            "\t\t<vlc:id>%d</vlc:id>" % idx,
-            "\t</extension>",
+            # '\t<extension application="http://www.videolan.org/vlc/playlist/0">',
+            # "\t\t<vlc:id>%d</vlc:id>" % idx,
+            # "\t</extension>",
             "</track>"])
         trackStr = '\n\t\t'.join(trackStrs)
         trackList.append(trackStr)

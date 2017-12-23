@@ -7,8 +7,10 @@ import subprocess
 import operator
 import glob
 import re
+import time
 
 import db_glue
+from mutagen.oggvorbis import OggVorbisHeaderError
 from mutagen.mp3 import MP3
 from EasyID3Custom import EasyID3Custom as EasyID3
 from mutagen.oggvorbis import OggVorbis
@@ -160,6 +162,12 @@ def oggencode(fname, dest, title,
         decodedData, errs = createFlacDecoder(fname)
         encoder = subprocess.Popen(["oggenc"] + args + ['-'], stdin=subprocess.PIPE)
         encoder.communicate(decodedData)
+    elif fname.lower().endswith(".ogg"):
+        decodedData, errs = createOggDecoder(fname)
+        encoder = subprocess.Popen(["oggenc"] + args + ['-r', '-B', '16', '-'],
+                    stdin=subprocess.PIPE)
+        encoder.communicate(decodedData)
+        time.sleep(0.5)
     else:
         subprocess.call(["oggenc"] + args + [fname])
 
@@ -169,16 +177,25 @@ def oggencode(fname, dest, title,
         ogg = OggVorbis(dest)
         if disc:
             if disccount:
-                ogg["discnumber"] = "%d/%d" % (disc, disccount)
+                ogg["discnumber"] = ["%d/%d" % (disc, disccount)]
             else:
-                ogg["discnumber"] = "%d" % disc
+                ogg["discnumber"] = ["%d" % disc]
         if trackcount:
-            ogg["tracknumber"] = "%d/%d" % (trackno, trackcount)
-        ogg.save()
+            ogg["tracknumber"] = ["%d/%d" % (trackno, trackcount)]
+        try:
+            ogg.save()
+        except OggVorbisHeaderError:
+            pass
 
 def createFlacDecoder(fName):
     # Special case for flac files
     decoder = subprocess.Popen(["flac", "--decode", "--silent", "--stdout", fName],
+                    stdout=subprocess.PIPE)
+    return decoder.communicate()
+
+def createOggDecoder(fName):
+    # Special case for flac files
+    decoder = subprocess.Popen(["oggdec", "--quiet", "-o", '-', '-R', '-b', '16', fName],
                     stdout=subprocess.PIPE)
     return decoder.communicate()
 
@@ -232,6 +249,8 @@ def cautiousUpdate(d1, d2, overwriteOnNone=False):
 
 def escapeXMLChars(s):
     s = s.replace('&', "&amp;")
+    s = s.replace('<', "&lt;")
+    s = s.replace('>', "&gt;")
     for c in xmlEscapedChars:
         s = s.replace(c, "&#%d;" % ord(c))
     return s

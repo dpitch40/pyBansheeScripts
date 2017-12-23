@@ -114,7 +114,7 @@ def CreateTrackMapping(tracks):
     return trackMapping
 
 # Edits tracks
-def Edit(tracks, destFiles, test, matchWithDB, relocate):
+def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
     edited = 0
 
     # Are we getting the metadata from a source apart from the files themselves
@@ -122,6 +122,8 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
     if extSource:
         destTracks = [Track.Track.fromDB(f) for f in destFiles]
         # trackMapping = CreateTrackMapping(destFiles)
+    elif rebase:
+        destTracks = [Track.Track([Track.FILE], rebase)]
 
     # Remove album artist if it is equal to the artist for all tracks
     firstArtist = tracks[0]["Artist"]
@@ -141,6 +143,8 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
             return matchKeys, track, None
         trackItr = itertools.imap(matchTrack, sorted(destTracks,
                 key=lambda t: (t["Disc"], t["TrackNumber"], t["Artist"], t["Album"])))
+    elif rebase:
+        trackItr = [(None, destTracks[0], tracks[0])]
     else:
         trackItr = zip([None] * len(tracks), [None] * len(tracks), tracks)
 
@@ -155,6 +159,7 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
                 continue
             audio = destTrack.audio
             track = origTrack
+            track["Duration"] = int(audio.info.length * 1000)
             Util.cautiousUpdate(track, destTrack, overwriteOnNone=True)
         else:
             audio = origTrack.audio
@@ -164,14 +169,16 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
         dbChanges = dict()
         relocated = None
 
-        if audio:
-            fileChanges = SyncTrackToFile(track, audio, nullAlbumArtist)
+        if audio and not rebase:
+            fileChanges = SyncTrackToFile(track, changes, audio, nullAlbumArtist)
         if not track.matchedWithDB:
             if matchWithDB:
                 print "* WARNING on %s: could not match with DB" % track.name
             # continue
+        elif rebase:
+            dbChanges = SyncTrackToDB(destTrack, changes, curTrackID=origTrack["TrackID"])
         elif matchWithDB:
-            dbChanges = SyncTrackToDB(track)
+            dbChanges = SyncTrackToDB(track, changes)
 
         # Relocate
         if audio:
@@ -183,14 +190,20 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
         if isinstance(curName, str):
             curName = curName.decode(Config.UnicodeEncoding)
 
-        if track["Location"] != curName:
+        track.update(changes)
+
+        if "Location" in changes:
+            newName = changes["Location"]
+        elif rebase:
+            newName = rebase
+        elif track["Location"] != curName:
             newName = track["Location"]
         else:
             base, ext = os.path.splitext(os.path.basename(curName))
             
             newName = track.getDestName(musicDir, ext, asUnicode=True)
 
-        if curName != newName and relocate:
+        if curName != newName and (relocate or rebase):
             relocated = (curName, newName)
             oldBase, oldDiff = os.path.split(curName)
             newBase, newDiff = os.path.split(newName)
@@ -205,12 +218,12 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
 
             if track.matchedWithDB:
                 oldUri = db.sql("SELECT Uri FROM CoreTracks WHERE TrackID = ?",
-                            (track["TrackID"],))[0]["Uri"]
+                            track["TrackID"])[0]["Uri"]
             else:
                 oldUri = ''
 
             newUri = db_glue.pathname2sql(newName.encode(Config.UnicodeEncoding))
-            dbChanges["Uri"] = (db_glue.pathname2sql(oldDiff)[7:], db_glue.pathname2sql(newDiff)[7:])
+            # dbChanges["Uri"] = (db_glue.pathname2sql(oldDiff)[7:], db_glue.pathname2sql(newDiff)[7:])
 
         if fileChanges or dbChanges or relocated:
             print track.name
@@ -221,13 +234,17 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
                 print "  DB:   %s" % '\n\t'.join(["%s:\t%s -> %s" % (k, v[0], v[1]) for 
                             k, v in sorted(dbChanges.items())])
 
-            if relocated:
+            if rebase:
+                dbChanges["Uri"] = (oldUri, newUri)
+                print "  Rebasing from %s to %s" % (oldDiff, newDiff)
+            elif relocated:
                 dbChanges["Uri"] = (oldUri, newUri)
                 m = "  Relocating from %s to %s" % (oldDiff, newDiff)
                 if os.path.exists(newName):
                     m += " (overwriting existing file)"
                     overwritten += 1
                 print m
+
             if "BitRate" in fileChanges:
                 print "  Reencoding from %d to %d bps" % (fileChanges["BitRate"])
             if dbChanges and matchWithDB and track.matchedWithDB:
@@ -241,7 +258,7 @@ def Edit(tracks, destFiles, test, matchWithDB, relocate):
                 if track.matchedWithDB:
                     db.commit()
                 
-                if relocated:
+                if relocated and not rebase:
                     curName, newName = relocated
                     newDir = os.path.dirname(newName)
                     if not os.path.exists(newDir):
@@ -290,7 +307,7 @@ def TrackToMutagenDict(d):
     audio = dict()
 
     for tag in ["Title", "Artist", "Album", "Genre", "Duration", "AlbumArtist", "Year"]:
-        value = d[tag]
+        value = d.get(tag, None)
         if value is None:
             continue
         if not isinstance(value, unicode):
@@ -299,7 +316,7 @@ def TrackToMutagenDict(d):
 
     countKeys = (("TrackNumber", "TrackCount"), ("Disc", "DiscCount"))
     for numKey, countKey in countKeys:
-        if d[numKey] is not None:
+        if d.get(numKey, None) is not None:
             numVal = d[numKey]
             newKey = Track.SQLToMutagen[numKey]
             if d[countKey] is not None:
@@ -311,19 +328,21 @@ def TrackToMutagenDict(d):
     return audio
 
 # Evaluates changes to be made to an MP3
-def SyncTrackToFile(track, audio, nullAlbumArtist):
+def SyncTrackToFile(track, _changes, audio, nullAlbumArtist):
     mDict = TrackToMutagenDict(track)
     audio["length"] = str(int(audio.info.length * 1000))
+    _changes = TrackToMutagenDict(_changes)
     changes = dict()
     for k, v in mDict.items():
-        newVal = v[0]
+        if k in _changes:
+            newVal = _changes[k]
+        else:
+            newVal = v[0]
         curVal = audio.get(k, [None])[0]
         if k not in audio or curVal != newVal:
             #Exceptions
-            if k == "length" and curVal is not None and newVal is not None:
-                curValInt, newValInt = int(curVal), int(newVal)
-                if abs(newValInt - curValInt) <= LENGTH_UPDATE_THRESHOLD_MS:
-                    continue
+            if k == "length":
+                continue # Can't change length in track
             elif nullAlbumArtist and k == "albumartistsort":
                 continue
 
@@ -334,18 +353,25 @@ def SyncTrackToFile(track, audio, nullAlbumArtist):
     return changes
 
 # Evaluates changes to be made to a DB entry
-def SyncTrackToDB(track):
-    curTrack = db.sql(Track.selectStmt % "TrackID = ?", (track["TrackID"],))[0]
+def SyncTrackToDB(track, _changes, curTrackID=None):
+    if curTrackID is None:
+        curTrackID = track["TrackID"]
+    curTrack = db.sql(Track.selectStmt % "TrackID = ?", curTrackID)[0]
     changes = dict()
     for k, v in track.items():
         curVal = curTrack.get(k, None)
+        if k in _changes:
+            v = _changes[k]
         if k not in curTrack or curVal != v:
-
             #Exceptions
             if k.startswith("Disc") and v is None and curVal == 0:
                 continue
             elif k == "Location":# or k == "Uri":
                 continue
+            elif k == "Duration" and curVal is not None and v is not None:
+                curValInt, newValInt = int(curVal), int(v)
+                if abs(newValInt - curValInt) <= LENGTH_UPDATE_THRESHOLD_MS:
+                    continue
 
             changes[k] = (curVal, v)
     return changes
@@ -366,7 +392,7 @@ def UpdateDB(changes, trackID):
 
     if "Album" in changes:
         newAlbum = changes["Album"][1]
-        rows = db.sql("SELECT AlbumID FROM CoreAlbums WHERE Title = ?", (newAlbum,))
+        rows = db.sql("SELECT AlbumID FROM CoreAlbums WHERE Title = ?", newAlbum)
         if len(rows) == 0:
             print "* WARNING: Album %r not found. Adding new albums not currently supported. " \
                     "Please change the album manually." % newAlbum
@@ -379,7 +405,7 @@ def UpdateDB(changes, trackID):
 
     if "Artist" in changes:
         newArtist = changes["Artist"][1]
-        rows = db.sql("SELECT ArtistID FROM CoreArtists WHERE Name = ?", (newArtist,))
+        rows = db.sql("SELECT ArtistID FROM CoreArtists WHERE Name = ?", newArtist)
         if len(rows) == 0:
             print "* WARNING: Artist %r not found. Adding new artists not currently supported. " \
                     "Please change the artist manually." % newArtist
@@ -387,7 +413,7 @@ def UpdateDB(changes, trackID):
             tracksChanges["ArtistID"] = rows[0]["ArtistID"]
     if len(tracksChanges) > 1:
         db.sql("UPDATE CoreTracks SET %s WHERE TrackID = :TrackID" % 
-            ', '.join(["%s = :%s" % (k, k) for k in tracksChanges if k != "TrackID"]), tracksChanges)
+            ', '.join(["%s = :%s" % (k, k) for k in tracksChanges if k != "TrackID"]), **tracksChanges)
 
 # Views tracks
 def View(tracks, useRepr=False):
@@ -408,7 +434,7 @@ def addDefaultArguments(parser):
         help="The source to get metadata from (db, files, or a location of a track list).")
     parser.add_argument("files", nargs='*', help="The files being edited/viewed, if any.")
 
-def getTracks(parser, args):
+def getTracks(parser, args, integrateChanges=False):
 
     if args.help_tags:
         print '\n'.join(sorted(EasyID3.valid_keys.keys()))
@@ -432,6 +458,9 @@ def getTracks(parser, args):
     extraDict = dict(args.extra)
     for k, v in extraDict.items():
         extraDict[k] = Util.convertStrValue(v)
+    kwargs = {}
+    if integrateChanges:
+        kwargs.update(extraDict)
 
     if args.source in ("db", "files", "dbonly", "filesonly"):
         if args.source == "db":
@@ -442,14 +471,17 @@ def getTracks(parser, args):
             sources = [TRACKLIST, FILE, DB]
         elif args.source == "filesonly":
             sources = [TRACKLIST, FILE]
-        tracks = [Track.Track(sources, fn, **extraDict) for fn in fNames]
+        tracks = [Track.Track(sources, fn, **kwargs) for fn in fNames]
         fNames = None
     else:
-        tl = ParseTables.getAugmentedTrackList(args.source, **extraDict)
+        tl = ParseTables.getAugmentedTrackList(args.source, **kwargs)
         tracks = [Track.Track([Track.TRACKLIST, Track.DB], None, **t) for t in tl]
     tracks.sort(key=operator.itemgetter("Artist", "Album", "Disc", "TrackNumber"))
 
-    return fNames, tracks
+    if integrateChanges:
+        return fNames, tracks
+    else:
+        return fNames, tracks, extraDict
 
 def main():
     actionChoices = ["view", "edit", "save"]
@@ -464,6 +496,7 @@ to files and/or synchronize metadata between files and the database."""
                         help="When viewing, use repr() to display rather than str().")
     parser.add_argument("--noreloc", dest="reloc", action="store_false",
                         help="Disable automatic relocation of files.")
+    parser.add_argument("--rebase", help="Change a track's source to this location.")
     parser.add_argument("action", nargs='?', choices=actionChoices, help="The action to take.")
     addDefaultArguments(parser)
 
@@ -473,10 +506,13 @@ to files and/or synchronize metadata between files and the database."""
         parser.print_help()
         return
 
-    fNames, tracks = getTracks(parser, args)
+    fNames, tracks, changes = getTracks(parser, args)
+    if args.rebase:
+        assert len(tracks) == 1, "Can only rebase 1 track at a time"
+        assert os.path.exists(args.rebase), "Must rebase to an existing file"
 
     if args.action == "edit":
-        Edit(tracks, fNames, args.test, args.matchwithdb, args.reloc)
+        Edit(tracks, fNames, changes, args.test, args.matchwithdb, args.reloc, args.rebase)
     elif args.action == "view":
         View(tracks, args.use_repr)
     else:
