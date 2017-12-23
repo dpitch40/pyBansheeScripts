@@ -176,13 +176,14 @@ class ArtDownloadTableLoader(TableLoader):
 
 class LibraryRegenerator(object):
 
-    def __init__(self, target, dest, backup, dryrun):
+    def __init__(self, target, dest, backup, cleanup, dryrun):
 
         self.schema = open("BansheeSchema.sql", 'rU').read()
 
         self.target = target
         self.dest = dest
         self.backup = backup
+        self.cleanup_only = cleanup
         self.dryrun = dryrun
 
         self.old_db = db_glue.new(self.target)
@@ -303,20 +304,20 @@ class LibraryRegenerator(object):
             self.backup_library()
 
         self.initial_cleanup()
-
-        old_lib_contents = self.load_library()
-
         if not self.dryrun:
             self.old_db.commit()
+
+        if not self.cleanup_only:
+            old_lib_contents = self.load_library()
+
+            # self.generate_new_library()
+
+            # self.recreate_db(old_lib_contents)
+
+            # if not self.dryrun:
+            #     self.db.commit()
+            # self.db.close()
         self.old_db.close()
-
-        # self.generate_new_library()
-
-        # self.recreate_db(old_lib_contents)
-
-        # if not self.dryrun:
-        #     self.db.commit()
-        # self.db.close()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -328,6 +329,8 @@ def main():
     parser.add_argument('-b', "--backup", help="Manually specify the location to back up the old library.")
     parser.add_argument('-n', "--dryrun", action="store_true", help="Display all the actions/SQL to be executed, "
                                                 "do not make any actual changes.")
+    parser.add_argument('-c', "--cleanup", action="store_true",
+                            help="Only clean up the old library, do not regenerate")
 
     args = parser.parse_args()
 
@@ -346,7 +349,7 @@ def main():
     else:
         args.backup = None
 
-    r = LibraryRegenerator(args.target, args.dest, args.backup, args.dryrun)
+    r = LibraryRegenerator(args.target, args.dest, args.backup, args.cleanup, args.dryrun)
     r.regenerate_library()
 
 if __name__ == "__main__":
