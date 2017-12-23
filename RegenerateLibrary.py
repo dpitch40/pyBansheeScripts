@@ -45,10 +45,14 @@ class TableLoader(metaclass=MetaLoader):
             self.table_name = table_name
 
     @classmethod
-    def _dereference(cls, _id, contents):
+    def _dereference(cls, name, _id, contents):
         table = contents[cls.table_name]
         if _id is not None:
-            return table[_id]
+            try:
+                return table[_id]
+            except KeyError as e:
+                print("Could not find %s %d in %s" % (name, _id, cls.table_name))
+                raise
         else:
             return None
 
@@ -65,7 +69,8 @@ class TableLoader(metaclass=MetaLoader):
             for row in rows:
                 for col_name, col_val in row.items():
                     if col_name in column_transforms:
-                        row[col_name] = column_transforms[col_name](col_val, self.contents)
+                        row[col_name] = column_transforms[col_name](col_name, col_val,
+                                        self.contents)
                 if self.key:
                     key = self.key
                 else:
@@ -116,22 +121,12 @@ class SmartPlaylistTableLoader(TableLoader):
     order = -3
     key = "SmartPlaylistID"
 
-class PodcastSyndicationsLoader(TableLoader):
-    table_name = "podcastsyndications"
-    order = -2
-    key = "FeedID"
-
 
 class RemovedTracksTableLoader(TableLoader):
     table_name = "coreremovedtracks"
     order = -1
     sort_key = "TrackID"
     dereference = False
-
-class PodcastItemsLoader(TableLoader):
-    table_name = "podcastitems"
-    order = -1
-    key = "ItemID"
 
 class ShufflerTableLoader(TableLoader):
     table_name = "coreshufflers"
@@ -146,18 +141,6 @@ class BookmarkTableLoader(TableLoader):
 class CacheModelTableLoader(TableLoader):
     table_name = "corecachemodels"
     key = "CacheID"
-
-class LastFMLoader(TableLoader):
-    table_name = "lastfmstations"
-    key = "StationID"
-
-class MetadataProblemsTableLoader(TableLoader):
-    table_name = "metadataproblems"
-    key = "ProblemID"
-
-class PodcastEnclosuresLoader(TableLoader):
-    table_name = "podcastenclosures"
-    key = "EnclosureID"
 
 class HyenaTableLoader(TableLoader):
     table_name = "hyenamodelversions"
@@ -187,10 +170,6 @@ class ArtDownloadTableLoader(TableLoader):
     table_name = "coverartdownloads"
     sort_key = "AlbumID"
 
-class IAItemTableLoader(TableLoader):
-    table_name = "iaitems"
-    sorty_key = "ItemID"
-
 # Table generators
 
 # Main driver class
@@ -206,6 +185,7 @@ class LibraryRegenerator(object):
         self.backup = backup
         self.dryrun = dryrun
 
+        self.old_db = db_glue.new(self.target)
         self.db = None
 
     def backup_library(self):
@@ -218,16 +198,69 @@ class LibraryRegenerator(object):
                 os.makedirs(_dir)
             shutil.copy2(self.target, self.backup)
 
+    def _remove_orphans(self, orphan_playlist, parent_playlist, parent_id,
+                            orphan_id=None):
+
+        ids = map(operator.itemgetter(parent_id),
+                self.old_db.sql("SELECT %s FROM %s" % (parent_id, parent_playlist)))
+        if orphan_id:
+            ids = set(ids)
+        else:
+            ids = sorted(list(ids))
+
+        if orphan_id:
+            select_sql = "SELECT %s, %s FROM %s" % (parent_id, orphan_id, orphan_playlist)
+
+            entries = self.old_db.sql(select_sql)
+            orphaned = [e for e in entries if e[parent_id] not in ids]
+            orphan_ids = list(map(operator.itemgetter(orphan_id), orphaned))
+
+            delete_sql = "DELETE FROM %s WHERE %s IN (%s)" %\
+                            (orphan_playlist, orphan_id, ','.join(map(str, orphan_ids)))
+        else:
+            delete_sql = "DELETE FROM %s WHERE %s NOT IN (%s)" %\
+                            (orphan_playlist, parent_id, ','.join(map(str, ids)))
+
+        print(delete_sql)
+        return self.old_db.sql(delete_sql)
+
+    def initial_cleanup(self):
+        print("Removing orphaned playlist entries...")
+
+        row_count = self._remove_orphans("CorePlaylistEntries", "CoreTracks",
+                            "TrackID", "EntryID")
+        print("%d rows deleted" % row_count)
+        row_count = self._remove_orphans("CorePlaylistEntries", "CorePlaylists",
+                            "PlaylistID")
+        print("%d rows deleted" % row_count)
+
+        print("Removing orphaned smart playlist entries...")
+
+        row_count = self._remove_orphans("CoreSmartPlaylistEntries", "CoreTracks",
+                            "TrackID", "EntryID")
+        print("%d rows deleted" % row_count)
+        row_count = self._remove_orphans("CoreSmartPlaylistEntries", "CoreSmartPlaylists",
+                            "SmartPlaylistID")
+        print("%d rows deleted" % row_count)
+
+        print("Removing orphaned shuffles...")
+
+        row_count = self._remove_orphans("CoreShuffles", "CoreShufflers", "ShufflerId")
+        print("%d rows deleted" % row_count)
+
+        print("Removing orphaned art downloads...")
+        row_count = self._remove_orphans("CoverArtDownloads", "CoreAlbums", "AlbumID",
+                                        "AlbumID")
+
     def load_library(self):
         """Loads the contents of the old library into a Python data structure."""
 
         lib_contents = {}
         table_names = map(operator.methodcaller("lower"), TABLE_NAME_RE.findall(self.schema))
-        db = db_glue.new(self.target)
         
         loaders = []
         for table_name in table_names:
-            loader = loader_registry[table_name](db, lib_contents)
+            loader = loader_registry[table_name](self.old_db, lib_contents)
             loaders.append(loader)
 
         loaders.sort(key=operator.attrgetter("order", "table_name"))
@@ -237,8 +270,6 @@ class LibraryRegenerator(object):
             rows = loader.load_table()
             lib_contents[loader.table_name] = rows
             # print(rows.keys())
-
-        db.close()
 
         pprint(next(iter(lib_contents["coreplaylistentries"].items())))
 
@@ -256,13 +287,11 @@ class LibraryRegenerator(object):
             for stmt in self.schema.split(';'):
                 print(stmt.strip() + ';')
                 self.db.sql(stmt)
-            self.db.commit()
         else:
             if os.path.exists(dest):
                 print("Deleting %s...\n" % dest)
             for stmt in sql.split(';'):
                 print(stmt.strip() + ';')
-
 
     def recreate_db(self, contents):
         """Recreates the old library, in regenerated form, at dest, from the contents data structure."""
@@ -270,15 +299,23 @@ class LibraryRegenerator(object):
 
     def regenerate_library(self):
 
-        if self.target == self.dest:
+        if self.backup:
             self.backup_library()
 
+        self.initial_cleanup()
+
         old_lib_contents = self.load_library()
+
+        if not self.dryrun:
+            self.old_db.commit()
+        self.old_db.close()
 
         # self.generate_new_library()
 
         # self.recreate_db(old_lib_contents)
 
+        # if not self.dryrun:
+        #     self.db.commit()
         # self.db.close()
 
 def main():
@@ -298,13 +335,16 @@ def main():
         print("The library %r does not exist." % args.target)
         return
 
-    if args.backup is None:
-        _dir, base = os.path.split(args.target)
-        base, ext = os.path.splitext(base)
-        args.backup = os.path.join(_dir, "%s_backup%s" % (base, ext))
-
     if args.dest is None:
         args.dest = args.target
+
+    if args.dest != args.target:
+        if args.backup is None:
+            _dir, base = os.path.split(args.target)
+            base, ext = os.path.splitext(base)
+            args.backup = os.path.join(_dir, "%s_backup%s" % (base, ext))
+    else:
+        args.backup = None
 
     r = LibraryRegenerator(args.target, args.dest, args.backup, args.dryrun)
     r.regenerate_library()

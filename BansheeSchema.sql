@@ -172,49 +172,8 @@ CREATE TABLE CoverArtDownloads (
                         Downloaded  BOOLEAN,
                         LastAttempt INTEGER NOT NULL
                     );
-CREATE TABLE LastfmStations (
-                        StationID           INTEGER PRIMARY KEY,
-                        Creator             STRING NOT NULL,
-                        Name                STRING NOT NULL,
-                        Type                STRING NOT NULL,
-                        Arg                 STRING NOT NULL,
-                        PlayCount           INTEGER NOT NULL
-                    );
-CREATE TABLE IaItems (
-                        ItemID         INTEGER PRIMARY KEY,
-                        ID             TEXT UNIQUE NOT NULL,
-                        Title          TEXT NOT NULL,
-                        MediaType      TEXT,
-                        DetailsJson    TEXT,
-
-                        SelectedFormat TEXT,
-                        BookmarkFile   TEXT,
-                        BookmarkPosition INTEGER DEFAULT 0
-                    );
 CREATE TABLE HyenaModelVersions (
                         id INTEGER PRIMARY KEY,
                         name TEXT UNIQUE,
                         version INTEGER);
-CREATE TABLE PodcastSyndications(last_auto_download INTEGER,AutoDownload INTEGER,DownloadStatus INTEGER,IsSubscribed INTEGER,FeedID INTEGER PRIMARY KEY,Title TEXT,Description TEXT,Url TEXT,Keywords TEXT,Category TEXT,Copyright TEXT,ImageUrl TEXT,UpdatePeriodMinutes INTEGER,Language TEXT,LastDownloadError INTEGER,LastDownloadTime INTEGER,Link TEXT,MaxItemCount INTEGER,PubDate INTEGER,LastBuildDate INTEGER,SyncSetting INTEGER);
-CREATE INDEX PodcastSyndicationsIndex ON PodcastSyndications (IsSubscribed, Title);
-CREATE TABLE PodcastItems(FeedID INTEGER,LicenseUri TEXT,ItemID INTEGER PRIMARY KEY,Author TEXT,Comments TEXT,Description TEXT,StrippedDescription TEXT,Guid TEXT,IsRead INTEGER,Link TEXT,Modified INTEGER,PubDate INTEGER,Title TEXT,Active INTEGER);
-CREATE INDEX PodcastItemsFeedIDIndex ON PodcastItems(FeedID);
-CREATE INDEX PodcastItemsGuidIndex ON PodcastItems(Guid);
-CREATE INDEX PodcastItemIsReadIndex ON PodcastItems(IsRead);
-CREATE TABLE PodcastEnclosures(ItemID INTEGER,EnclosureID INTEGER PRIMARY KEY,LocalPath TEXT,Url TEXT,Keywords TEXT,Duration INTEGER,FileSize INTEGER,MimeType TEXT,DownloadedAt INTEGER,DownloadStatus INTEGER);
-CREATE INDEX PodcastEnclosuresItemIDIndex ON PodcastEnclosures(ItemID);
 CREATE TABLE Bookmarks(BookmarkId INTEGER PRIMARY KEY,Position INTEGER,CreatedAt INTEGER,Type TEXT,TrackId INTEGER);
-CREATE TABLE MetadataProblems (
-                        ProblemID   INTEGER PRIMARY KEY,
-                        ProblemType TEXT NOT NULL,
-                        TypeOrder   INTEGER NOT NULL,
-                        Generation  INTEGER NOT NULL,
-                        Selected    INTEGER DEFAULT 1,
-
-                        SolutionValue       TEXT,
-                        SolutionOptions     TEXT,
-                        ObjectIds   TEXT,
-                        ObjectCount INTEGER,
-
-                        UNIQUE (ProblemType, Generation, ObjectIds) ON CONFLICT IGNORE
-                    );

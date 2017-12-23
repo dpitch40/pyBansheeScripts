@@ -111,7 +111,7 @@ class DB:
         
         self.curs.execute(sqlstr, parms)
         if (self.curs.description is None):
-            return None
+            return self.curs.rowcount
         else:
             return self.pack_rows(self.curs.description, self.curs.fetchall())
     
