@@ -1,3 +1,4 @@
+import functools
 import argparse
 import os.path
 import os
@@ -7,16 +8,16 @@ import re
 import operator
 from pprint import pprint
 
-DEFAULT_LIBRARY = os.path.expanduser("~/.config/banshee-1/banshee.db")
+DEFAULT_LIBRARY = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
 
 TABLE_NAME_RE = re.compile(r"(?<=CREATE TABLE )\w+")
+
+_ = lambda *args: args
 
 # Table loaders
 
 loader_registry = {}
 key_registry = {}
-
-_ = lambda *args: args
 
 class MetaLoader(type):
     def __new__(cls, name, bases, namespace, **kwds):
@@ -37,12 +38,9 @@ class TableLoader(metaclass=MetaLoader):
     order = 0
     dereference = True
 
-    def __init__(self, db, contents, table_name=None):
+    def __init__(self, db, contents):
         self.db = db
         self.contents = contents
-
-        if table_name and self.table_name is None:
-            self.table_name = table_name
 
     @classmethod
     def _dereference(cls, name, _id, contents):
@@ -172,6 +170,92 @@ class ArtDownloadTableLoader(TableLoader):
 
 # Table generators
 
+generator_registry = {}
+
+class MetaGenerator(type):
+    def __new__(cls, name, bases, namespace, **kwds):
+        new_cls = super(MetaGenerator, cls).__new__(cls, name, bases, namespace)
+        if bases:
+            if new_cls.loader_class:
+                generator_registry[new_cls.loader_class] = new_cls
+                new_cls.table_name = new_cls.loader_class.table_name
+        return new_cls
+
+class TableGenerator(metaclass=MetaGenerator):
+    loader_class = None
+
+    def __init__(self, db, contents):
+        self.db = db
+        self.contents = contents
+
+    def _filter_row(self, row):
+        return True
+
+    def generate_table(self):
+        table_contents = self.contents[self.table_name]
+        sqls = []
+        if table_contents:
+            column_names = sorted(list(table_contents.values())[0].keys())
+
+            unlinked_rows = map(self._unlink_row, table_contents.values())
+
+            for row in unlinked_rows:
+                if self._filter_row(row):
+                    sqls.append(self.db.preview_sql("INSERT INTO %s (%s) VALUES (%s)" %
+                        (self.table_name,
+                         ','.join(column_names), ','.join(['?'] * len(column_names))),
+                         *[row[c] for c in column_names]))
+
+        return sqls
+
+    def _unlink_row(self, row):
+        new_row = {}
+        for k, v in row.items():
+            if isinstance(v, dict):
+                new_row[k] = v[k]
+            else:
+                new_row[k] = v
+        return new_row
+
+class PrimarySourceTableGenerator(TableGenerator):
+    loader_class = PrimarySourceTableLoader
+class ArtistTableGenerator(TableGenerator):
+    loader_class = ArtistTableLoader
+class AlbumTableGenerator(TableGenerator):
+    loader_class = AlbumTableLoader
+class TrackTableGenerator(TableGenerator):
+    loader_class = TrackTableLoader
+class PlaylistTableGenerator(TableGenerator):
+    loader_class = PlaylistTableLoader
+class SmartPlaylistTableGenerator(TableGenerator):
+    loader_class = SmartPlaylistTableLoader
+class ShufflerTableGenerator(TableGenerator):
+    loader_class = ShufflerTableLoader
+class BookmarkTableGenerator(TableGenerator):
+    loader_class = BookmarkTableLoader
+class CacheModelTableGenerator(TableGenerator):
+    loader_class = CacheModelTableLoader
+class HyenaTableGenerator(TableGenerator):
+    loader_class = HyenaTableLoader
+class PlaylistEntryTableGenerator(TableGenerator):
+    loader_class = PlaylistEntryTableLoader
+class SmartPlaylistEntryTableGenerator(TableGenerator):
+    loader_class = SmartPlaylistEntryTableLoader
+class ShufflesTableGenerator(TableGenerator):
+    loader_class = ShufflesTableLoader
+class ShuffleModsTableGenerator(TableGenerator):
+    loader_class = ShuffleModsTableLoader
+class ConfigTableGenerator(TableGenerator):
+    loader_class = ConfigTableLoader
+class ArtDownloadTableGenerator(TableGenerator):
+    loader_class = ArtDownloadTableLoader
+
+class RemovedTracksTableGenerator(TableGenerator):
+    loader_class = RemovedTracksTableLoader
+
+    def _filter_row(self, row):
+        return False # Don't regenerate this table
+
 # Main driver class
 
 class LibraryRegenerator(object):
@@ -215,6 +299,8 @@ class LibraryRegenerator(object):
             entries = self.old_db.sql(select_sql)
             orphaned = [e for e in entries if e[parent_id] not in ids]
             orphan_ids = list(map(operator.itemgetter(orphan_id), orphaned))
+            if not orphan_ids:
+                return 0
 
             delete_sql = "DELETE FROM %s WHERE %s IN (%s)" %\
                             (orphan_playlist, orphan_id, ','.join(map(str, orphan_ids)))
@@ -252,6 +338,9 @@ class LibraryRegenerator(object):
         print("Removing orphaned art downloads...")
         row_count = self._remove_orphans("CoverArtDownloads", "CoreAlbums", "AlbumID",
                                         "AlbumID")
+        print("%d rows deleted" % row_count)
+
+        print()
 
     def load_library(self):
         """Loads the contents of the old library into a Python data structure."""
@@ -259,44 +348,70 @@ class LibraryRegenerator(object):
         lib_contents = {}
         table_names = map(operator.methodcaller("lower"), TABLE_NAME_RE.findall(self.schema))
         
-        loaders = []
+        self.loaders = []
         for table_name in table_names:
             loader = loader_registry[table_name](self.old_db, lib_contents)
-            loaders.append(loader)
+            self.loaders.append(loader)
 
-        loaders.sort(key=operator.attrgetter("order", "table_name"))
+        self.loaders.sort(key=operator.attrgetter("order", "table_name"))
 
-        for loader in loaders:
-            print("Loading %s..." % loader.table_name)
+        for loader in self.loaders:
+            print("Loading %s... " % loader.table_name, end='')
             rows = loader.load_table()
             lib_contents[loader.table_name] = rows
-            # print(rows.keys())
+            print("%d rows found" % (len(rows)))
 
-        pprint(next(iter(lib_contents["coreplaylistentries"].items())))
+        print()
 
         return lib_contents
 
     def generate_new_library(self):
         """Creates a new, empty library with the proper schema at dest."""
-        print("Generating a new empty library at %s...\n" % dest)
+        print("Generating a new empty library at %s..." % self.dest)
 
+        if os.path.exists(self.dest):
+            print("Deleting existing library at %s..." % self.dest)
+            if not self.dryrun:
+                os.remove(self.dest)
+        print()
         if not self.dryrun:
-            if os.path.exists(dest):
-                print("Deleting %s...\n" % dest)
-                os.remove(dest)
-            self.db = db_glue.new(dest)
-            for stmt in self.schema.split(';'):
-                print(stmt.strip() + ';')
+            self.db = db_glue.new(self.dest)
+        for stmt in self.schema.split(';'):
+            print(stmt.strip() + ';')
+            if not self.dryrun:
                 self.db.sql(stmt)
-        else:
-            if os.path.exists(dest):
-                print("Deleting %s...\n" % dest)
-            for stmt in sql.split(';'):
-                print(stmt.strip() + ';')
+
+        print()
 
     def recreate_db(self, contents):
         """Recreates the old library, in regenerated form, at dest, from the contents data structure."""
-        pass
+
+        print("Recreating DB from stored contents...\n")
+
+        for loader in self.loaders:
+            generator = generator_registry[loader.__class__](self.db if not self.dryrun else self.old_db, contents)
+
+            sqls = generator.generate_table()
+            print("Inserting %d rows in %s..." % (len(sqls), generator.table_name))
+            if sqls:
+                print('\n'.join(sqls[:5]))
+                if not self.dryrun:
+                    for sql in sqls:
+                        self.db.sql(sql)
+
+        print()
+
+    def reindex(self, contents):
+        print("Reindexing DB entries...\n")
+
+        for loader in self.loaders:
+            key = loader.key if loader.key else loader.sort_key
+            if not loader.key and key in key_registry:
+                continue
+            table_contents = contents[loader.table_name]
+
+            for new_id, row in enumerate(sorted(table_contents.values(), key=operator.itemgetter(key))):
+                row[key] = new_id + 1
 
     def regenerate_library(self):
 
@@ -310,13 +425,17 @@ class LibraryRegenerator(object):
         if not self.cleanup_only:
             old_lib_contents = self.load_library()
 
-            # self.generate_new_library()
+            self.reindex(old_lib_contents)
 
-            # self.recreate_db(old_lib_contents)
+            # pprint(next(iter(old_lib_contents["coreplaylistentries"].items())))
 
-            # if not self.dryrun:
-            #     self.db.commit()
-            # self.db.close()
+            self.generate_new_library()
+
+            self.recreate_db(old_lib_contents)
+
+            if not self.dryrun:
+                self.db.commit()
+                self.db.close()
         self.old_db.close()
 
 def main():
@@ -341,7 +460,7 @@ def main():
     if args.dest is None:
         args.dest = args.target
 
-    if args.dest != args.target:
+    if args.dest == args.target:
         if args.backup is None:
             _dir, base = os.path.split(args.target)
             base, ext = os.path.splitext(base)
