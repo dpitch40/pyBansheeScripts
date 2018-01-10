@@ -87,8 +87,12 @@ class DB:
         for k, v in kwargs.items():
             quoted_kwargs[k] = self._quote_value(v)
 
-        for quoted in quoted_args:
-            sqlstr = sqlstr.replace('?', quoted, 1)
+        # Replace non-keyword arguments in two steps, in case any of them contain question marks
+        for i, quoted in enumerate(quoted_args):
+            sqlstr = sqlstr.replace('?', "%%QARG%d%%" % i, 1)
+        for i, quoted in enumerate(quoted_args):
+            sqlstr = sqlstr.replace("%%QARG%d%%" % i, quoted, 1)
+
         for k, quoted in quoted_kwargs.items():
             sqlstr = sqlstr.replace(':%s' % k, quoted)
 

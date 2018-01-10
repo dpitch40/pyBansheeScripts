@@ -201,10 +201,11 @@ class TableGenerator(metaclass=MetaGenerator):
 
             for row in unlinked_rows:
                 if self._filter_row(row):
-                    sqls.append(self.db.preview_sql("INSERT INTO %s (%s) VALUES (%s)" %
-                        (self.table_name,
-                         ','.join(column_names), ','.join(['?'] * len(column_names))),
-                         *[row[c] for c in column_names]))
+                    formatted = "INSERT INTO %s (%s) VALUES (%s)" % \
+                        (self.table_name, ','.join(column_names), ','.join(['?'] * len(column_names)))
+                    col_vals = [row[c] for c in column_names]
+                    sql = self.db.preview_sql(formatted, *col_vals)
+                    sqls.append(sql)
 
         return sqls
 
@@ -340,7 +341,10 @@ class LibraryRegenerator(object):
                                         "AlbumID")
         print("%d rows deleted" % row_count)
 
-        print()
+        print("Deleting smart playlists with invalid PrimarySourceIDs...")
+        row_count = self._remove_orphans("CoreSmartPlaylists", "CorePrimarySources", "PrimarySourceID",
+                                        "SmartPlaylistID")
+        print("%d rows deleted" % row_count)
 
     def load_library(self):
         """Loads the contents of the old library into a Python data structure."""
