@@ -6,6 +6,7 @@ import db_glue
 import shutil
 import re
 import operator
+import collections
 from pprint import pprint
 
 DEFAULT_LIBRARY = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
@@ -13,6 +14,17 @@ DEFAULT_LIBRARY = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', '
 TABLE_NAME_RE = re.compile(r"(?<=CREATE TABLE )\w+")
 
 _ = lambda *args: args
+
+playlistid_re = re.compile(r'<field name="(?:smart)?playlistid" ?/><int>(\d+)</int>')
+
+def playlist_id_replace(m):
+    matched = m.group(0)
+    _id = m.group(1)
+    if "smart" in matched:
+        lookup = SmartPlaylistTableGenerator.reindexed
+    else:
+        lookup = PlaylistTableGenerator.reindexed
+    return matched.replace(_id, str(lookup[int(_id)]))
 
 # Table loaders
 
@@ -114,9 +126,10 @@ class PlaylistTableLoader(TableLoader):
     order = -3
     key = "PlaylistID"
 
+
 class SmartPlaylistTableLoader(TableLoader):
     table_name = "coresmartplaylists"
-    order = -3
+    order = -2
     key = "SmartPlaylistID"
 
 
@@ -177,8 +190,11 @@ class MetaGenerator(type):
         new_cls = super(MetaGenerator, cls).__new__(cls, name, bases, namespace)
         if bases:
             if new_cls.loader_class:
-                generator_registry[new_cls.loader_class] = new_cls
-                new_cls.table_name = new_cls.loader_class.table_name
+                loader = new_cls.loader_class
+                generator_registry[loader] = new_cls
+                new_cls.table_name = loader.table_name
+                new_cls.sort_key = loader.key if loader.key else loader.sort_key
+                new_cls.reindex = bool(loader.key or new_cls.sort_key not in key_registry)
         return new_cls
 
 class TableGenerator(metaclass=MetaGenerator):
@@ -187,6 +203,8 @@ class TableGenerator(metaclass=MetaGenerator):
     def __init__(self, db, contents):
         self.db = db
         self.contents = contents
+
+        self.new_id = 1
 
     def _filter_row(self, row):
         return True
@@ -197,17 +215,34 @@ class TableGenerator(metaclass=MetaGenerator):
         if table_contents:
             column_names = sorted(list(table_contents.values())[0].keys())
 
-            unlinked_rows = map(self._unlink_row, table_contents.values())
-
-            for row in unlinked_rows:
+            for row in sorted(table_contents.values(), key=self._get_sort_key):
                 if self._filter_row(row):
+                    if self.reindex:
+                        self._reindex_row(row)
+                    transformed_row = self._transform_row(row)
+
                     formatted = "INSERT INTO %s (%s) VALUES (%s)" % \
                         (self.table_name, ','.join(column_names), ','.join(['?'] * len(column_names)))
-                    col_vals = [row[c] for c in column_names]
+                    col_vals = [transformed_row[c] for c in column_names]
                     sql = self.db.preview_sql(formatted, *col_vals)
                     sqls.append(sql)
 
         return sqls
+
+    def _get_sort_key(self, row):
+        v = row[self.sort_key]
+        if isinstance(v, dict):
+            v = v[self.sort_key]
+        return v
+
+    def _reindex_row(self, row):
+        row[self.sort_key] = self.new_id
+        self.new_id += 1
+        return row
+
+    def _transform_row(self, row):
+        row = self._unlink_row(row)
+        return row
 
     def _unlink_row(self, row):
         new_row = {}
@@ -226,10 +261,8 @@ class AlbumTableGenerator(TableGenerator):
     loader_class = AlbumTableLoader
 class TrackTableGenerator(TableGenerator):
     loader_class = TrackTableLoader
-class PlaylistTableGenerator(TableGenerator):
-    loader_class = PlaylistTableLoader
-class SmartPlaylistTableGenerator(TableGenerator):
-    loader_class = SmartPlaylistTableLoader
+class PlaylistEntryTableGenerator(TableGenerator):
+    loader_class = PlaylistEntryTableLoader
 class ShufflerTableGenerator(TableGenerator):
     loader_class = ShufflerTableLoader
 class BookmarkTableGenerator(TableGenerator):
@@ -238,8 +271,6 @@ class CacheModelTableGenerator(TableGenerator):
     loader_class = CacheModelTableLoader
 class HyenaTableGenerator(TableGenerator):
     loader_class = HyenaTableLoader
-class PlaylistEntryTableGenerator(TableGenerator):
-    loader_class = PlaylistEntryTableLoader
 class SmartPlaylistEntryTableGenerator(TableGenerator):
     loader_class = SmartPlaylistEntryTableLoader
 class ShufflesTableGenerator(TableGenerator):
@@ -250,6 +281,27 @@ class ConfigTableGenerator(TableGenerator):
     loader_class = ConfigTableLoader
 class ArtDownloadTableGenerator(TableGenerator):
     loader_class = ArtDownloadTableLoader
+
+class PlaylistGenerator(TableGenerator):
+    def _reindex_row(self, row):
+        self.reindexed[row[self.sort_key]] = self.new_id
+        return super(PlaylistGenerator, self)._reindex_row(row)
+
+class PlaylistTableGenerator(PlaylistGenerator):
+    loader_class = PlaylistTableLoader
+    reindexed = collections.defaultdict(dict)
+
+class SmartPlaylistTableGenerator(PlaylistGenerator):
+    loader_class = SmartPlaylistTableLoader
+    reindexed = collections.defaultdict(dict)
+
+    def _transform_row(self, row):
+        new_row =  super(SmartPlaylistTableGenerator, self)._transform_row(row)
+
+        # Transform table condition
+        new_row["Condition"] = playlistid_re.sub(playlist_id_replace, new_row["Condition"])
+
+        return new_row
 
 class RemovedTracksTableGenerator(TableGenerator):
     loader_class = RemovedTracksTableLoader
@@ -405,18 +457,6 @@ class LibraryRegenerator(object):
 
         print()
 
-    def reindex(self, contents):
-        print("Reindexing DB entries...\n")
-
-        for loader in self.loaders:
-            key = loader.key if loader.key else loader.sort_key
-            if not loader.key and key in key_registry:
-                continue
-            table_contents = contents[loader.table_name]
-
-            for new_id, row in enumerate(sorted(table_contents.values(), key=operator.itemgetter(key))):
-                row[key] = new_id + 1
-
     def regenerate_library(self):
 
         if self.backup:
@@ -428,8 +468,6 @@ class LibraryRegenerator(object):
 
         if not self.cleanup_only:
             old_lib_contents = self.load_library()
-
-            self.reindex(old_lib_contents)
 
             # pprint(next(iter(old_lib_contents["coreplaylistentries"].items())))
 
