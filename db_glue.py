@@ -44,6 +44,12 @@ class DB:
         self.conn = sql.connect(path)
         self.curs = self.conn.cursor()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
     def close(self):
         self.conn.close()
     
