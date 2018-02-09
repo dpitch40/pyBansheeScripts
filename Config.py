@@ -1,4 +1,5 @@
 import os.path
+import six
 
 dest = os.path.join(os.path.dirname("__file__"), "ConfigUser.py")
 
@@ -16,8 +17,8 @@ SlotNums = {"ROOT": 1}
 
 PlaylistsToSync = {}
 """)
-    print "ConfigUser.py not defined! Please open the generated file and override " \
-          "its settings with the correct values."
+    six.print_("ConfigUser.py not defined! Please open the generated file and override "
+               "its settings with the correct values.")
     raise SystemExit
 
 from ConfigDefaults import *

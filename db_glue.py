@@ -3,8 +3,9 @@
 import sqlite3 as sql
 import os.path
 import os
-import urllib
 import re
+
+from six.moves.urllib.request import url2pathname
 
 defaultLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
 
@@ -33,7 +34,7 @@ def pathname2sql(path):
 
 def sql2pathname(uri):
     # Just strip the "file://" from the start and run through url2pathname
-    return urllib.url2pathname(uri[7:])
+    return url2pathname(uri[7:])
 
 class DB:
     """An object representing a cursor to a database."""

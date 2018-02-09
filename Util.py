@@ -9,22 +9,21 @@ import glob
 import re
 import time
 
+import six
+from six.moves import range
+
 import db_glue
-from mutagen.oggvorbis import OggVorbisHeaderError
-from mutagen.mp3 import MP3
-from EasyID3Custom import EasyID3Custom as EasyID3
-from mutagen.oggvorbis import OggVorbis
 import Config
 
 forbiddenChars = ':;/\\!?*"<>|'
 forbiddenDirChars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
-translatetable = [chr(i) for i in xrange(0, 256)]
+translatetable = [chr(i) for i in range(0, 256)]
 for c in string.punctuation:
     translatetable[ord(c)] = '_'
 translatetable = ''.join(translatetable)
 
-forbiddentable = [chr(i) for i in xrange(0, 256)]
+forbiddentable = [chr(i) for i in range(0, 256)]
 for c in forbiddenChars:
     forbiddentable[ord(c)] = '_'
 forbiddentable = ''.join(forbiddentable)
@@ -34,7 +33,7 @@ vorbisQuals = {-1: 45, 0: 64, 1: 80, 2: 96, 3: 112, 4: 128, 5: 160,
 
 def debug(msg, debug):
     if debug:
-        print "DEBUG:\t%s" % msg
+        six.print_("DEBUG:\t%s" % msg)
 
 # Takes the intersection of two lists of filenames: returns the files exclusive to the first,
 # the common names, and the names exclusive to the second.
@@ -81,7 +80,7 @@ def encode(fName, dest, title,
     elif ext == ".ogg":
         func = oggencode
     else:
-        raise ValueError, "No encoder defined for %s" % ext
+        raise ValueError("No encoder defined for %s" % ext)
     
     destDir = os.path.dirname(dest)
     if not os.path.exists(destDir):
@@ -96,6 +95,9 @@ def mp3encode(fname, dest, title,
               artist, album, year, genre,
               trackno, trackcount, disc, disccount,
               bitrate, qual=Config.MP3Qual):
+
+    from mutagen.mp3 import MP3
+    from EasyID3Custom import EasyID3Custom as EasyID3
 
     # Set up arguments
     args = ["--noreplaygain", #Disable replaygain (don't want to mess up automated dynamics)
@@ -139,7 +141,10 @@ def oggencode(fname, dest, title,
               artist, album, year, genre,
               trackno, trackcount, disc, disccount,
               bitrate, qual=None):
-    
+
+    from mutagen.oggvorbis import OggVorbisHeaderError
+    from mutagen.oggvorbis import OggVorbis
+
     if not qual:
         qual = bitrateToVorbisQual(bitrate)
     # Set up arguments
