@@ -4,8 +4,9 @@ import sqlite3 as sql
 import os.path
 import os
 import re
+import operator
 
-from six.moves.urllib.request import url2pathname
+from six.moves.urllib.request import url2pathname, pathname2url
 
 defaultLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
 
@@ -26,7 +27,7 @@ def pathname2sql(path):
     if m:
         numPeriods = len(m.group(1))
         path = os.path.join(pathDir, "%s%s" % ('_' * numPeriods, pathBase[numPeriods:]))
-    sqlloc = urllib.pathname2url(path)
+    sqlloc = pathname2url(path)
     # Escape troublesome characters
     for c in PATHNAME_CHARS:
           sqlloc = sqlloc.replace("%%%X" % ord(c), c)
@@ -66,6 +67,10 @@ class DB:
         for k in d.keys():
             if d[k] == '' or d[k] is None:
                 d[k] = 'NULL'
+
+    def get_tables(self):
+        rows = self.sql("SELECT name FROM sqlite_master WHERE type='table'")
+        return sorted(map(operator.itemgetter('name'), rows))
     
     def insert(self, table, id_cols, nonid_cols):
         all_cols = id_cols.copy()

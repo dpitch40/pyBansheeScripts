@@ -47,17 +47,21 @@ def compare_filesets(filelist1, filelist2, sort=False):
         fName, ext = os.path.splitext(fName)
         return os.path.join(albumDir, artistDir, "%s%s" % (fName, ext)).lower().replace('.', '')
     
-    translatedfiles1 = dict(zip(map(demote, filelist1), filelist1))
-    translatedfiles2 = dict(zip(map(demote, filelist2), filelist2))
-    set1 = set(translatedfiles1.keys())
-    set2 = set(translatedfiles2.keys())
-    on1not2 = [translatedfiles1[f] for f in set1 - set2]
-    on2not1 = [translatedfiles2[f] for f in set2 - set1]
-    common = [translatedfiles1[f] for f in set1 & set2]
+    return boolean_diff(filelist1, filelist2, demote, sort)
+
+def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
+    translated1 = dict(zip(map(transform, l1), l1))
+    translated2 = dict(zip(map(transform, l2), l2))
+    set1 = set(translated1.keys())
+    set2 = set(translated2.keys())
+    on1not2 = [translated1[f] for f in set1 - set2]
+    on2not1 = [translated2[f] for f in set2 - set1]
+    common = [translated1[f] for f in set1 & set2]
     if sort:
         return sorted(on1not2), sorted(common), sorted(on2not1)
     else:
         return on1not2, common, on2not1
+
 
 def convertStrValue(v, convertNumbers=True):
     if v == '' or v == "None" or v is None:
