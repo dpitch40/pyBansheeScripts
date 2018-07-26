@@ -14,6 +14,14 @@ tracks containing a # will not import correctly from .m3u playlist files and wil
 be re-added manually).
 
 Your library should now be running more smoothly!
+
+A less heavy-handed way: go into the database with sqlite3, run the ANALYZE command,
+and check which indices have become imprecise due to duplicate entries; delete any
+relevant ones. Then, if the CoreEntriesPlaylistIndex does not exist, run the SQL command
+
+CREATE INDEX CoreEntriesPlaylistIndex ON CorePlaylistEntries(TrackID, PlaylistID);
+
+to create it. This worked to solve the slow shuffle issue for me, 2018-2-14.
 """
 
 import argparse

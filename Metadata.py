@@ -24,8 +24,8 @@ trackNumRe = re.compile(r"^(?:(\d)\-)?(\d{1,2})(.+)\.(\w{2,4})$")
 
 LENGTH_UPDATE_THRESHOLD_MS = 600
 
-def ExtractKeys(track, discLens=None):
-    keys = list()
+def ExtractKeys(track, index, discLens=None):
+    keys = ['Track#%d' % index]
     album, artist, title, tn, dn = track["Album"], track["Artist"], track["Title"], \
                                     track["TrackNumber"], track["Disc"]
 
@@ -98,8 +98,8 @@ def CreateTrackMapping(tracks):
         if dn:
             discLens[dn] += 1
 
-    for track in tracks:
-        possKeys = ExtractKeys(track, discLens)
+    for i, track in enumerate(tracks):
+        possKeys = ExtractKeys(track, i, discLens)
         
         # Ensure each mapping key is unique across all tracks
         for k in possKeys:
@@ -135,14 +135,15 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
     # print "trackMapping keys =\n%s\n" % '\n'.join(map(str, sorted(trackMapping.keys())))
 
     if extSource:
-        def matchTrack(track):
-            matchKeys = ExtractKeys(track)
+        def matchTrack(track, index):
+            matchKeys = ExtractKeys(track, index)
             for k in matchKeys:
                 if k in trackMapping:
                     return matchKeys, track, trackMapping[k]
             return matchKeys, track, None
         trackItr = itertools.imap(matchTrack, sorted(destTracks,
-                key=lambda t: (t["Disc"], t["TrackNumber"], t["Artist"], t["Album"])))
+                key=lambda t: (t["Disc"], t["TrackNumber"], t["Artist"], t["Album"])),
+                    range(len(destTracks)))
     elif rebase:
         trackItr = [(None, destTracks[0], tracks[0])]
     else:
@@ -190,7 +191,7 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
         if isinstance(curName, str):
             curName = curName.decode(Config.UnicodeEncoding)
 
-        track.update(changes)
+        # track.update(changes)
 
         if "Location" in changes:
             newName = changes["Location"]
@@ -312,7 +313,7 @@ def TrackToMutagenDict(d):
             continue
         if not isinstance(value, unicode):
             value = unicode(str(value))
-        audio[Track.SQLToMutagen[tag]] = [value]
+        audio[Track.SQLToMutagen[tag]] = value
 
     countKeys = (("TrackNumber", "TrackCount"), ("Disc", "DiscCount"))
     for numKey, countKey in countKeys:
@@ -321,9 +322,9 @@ def TrackToMutagenDict(d):
             newKey = Track.SQLToMutagen[numKey]
             if d[countKey] is not None:
                 countVal = d[countKey]
-                audio[newKey] = [u"%d/%d" % (numVal, countVal)]
+                audio[newKey] = u"%d/%d" % (numVal, countVal)
             else:
-                audio[newKey] = [unicode(str(numVal))]
+                audio[newKey] = unicode(str(numVal))
 
     return audio
 
@@ -337,7 +338,7 @@ def SyncTrackToFile(track, _changes, audio, nullAlbumArtist):
         if k in _changes:
             newVal = _changes[k]
         else:
-            newVal = v[0]
+            newVal = v
         curVal = audio.get(k, [None])[0]
         if k not in audio or curVal != newVal:
             #Exceptions
@@ -347,6 +348,10 @@ def SyncTrackToFile(track, _changes, audio, nullAlbumArtist):
                 continue
 
             changes[k] = (curVal, newVal)
+            audio[k] = v
+    for k, v in _changes.items():
+        if k not in changes:
+            changes[k] = (None, v)
             audio[k] = v
     if abs(track["BitRate"] * 1000 - audio.info.bitrate) > 1000:
         changes["BitRate"] = (audio.info.bitrate, track["BitRate"] * 1000)
@@ -374,6 +379,9 @@ def SyncTrackToDB(track, _changes, curTrackID=None):
                     continue
 
             changes[k] = (curVal, v)
+    for k, v in _changes.items():
+        if k not in changes:
+            changes[k] = (None, v)
     return changes
 
 # Updates the DB with the changes from SyncTrackToDB
@@ -433,6 +441,8 @@ def addDefaultArguments(parser):
     parser.add_argument("source", nargs='?',
         help="The source to get metadata from (db, files, or a location of a track list).")
     parser.add_argument("files", nargs='*', help="The files being edited/viewed, if any.")
+    parser.add_argument("--nodb", action="store_false", dest="matchwithdb",
+                        help="Don't try to match tracks with the database.")
 
 def getTracks(parser, args, integrateChanges=False):
 
@@ -463,19 +473,22 @@ def getTracks(parser, args, integrateChanges=False):
         kwargs.update(extraDict)
 
     if args.source in ("db", "files", "dbonly", "filesonly"):
-        if args.source == "db":
-            sources = [TRACKLIST, DB, FILE]
+        if not args.matchwithdb or args.source == "filesonly":
+            sources = [TRACKLIST, FILE]
         elif args.source == "dbonly":
             sources = [TRACKLIST, DB]
         elif args.source == "files":
             sources = [TRACKLIST, FILE, DB]
-        elif args.source == "filesonly":
-            sources = [TRACKLIST, FILE]
+        elif args.source == "db":
+            sources = [TRACKLIST, DB, FILE]
         tracks = [Track.Track(sources, fn, **kwargs) for fn in fNames]
         fNames = None
     else:
         tl = ParseTables.getAugmentedTrackList(args.source, **kwargs)
-        tracks = [Track.Track([Track.TRACKLIST, Track.DB], None, **t) for t in tl]
+        sources = [Track.TRACKLIST]
+        if args.matchwithdb:
+            sources.append(Track.DB)
+        tracks = [Track.Track(sources, None, **t) for t in tl]
     tracks.sort(key=operator.itemgetter("Artist", "Album", "Disc", "TrackNumber"))
 
     if integrateChanges:
@@ -490,8 +503,6 @@ def main():
 to files and/or synchronize metadata between files and the database."""
 
     parser = argparse.ArgumentParser(description=progDesc)
-    parser.add_argument("--nodb", action="store_false", dest="matchwithdb",
-                        help="Don't try to match tracks with the database.")
     parser.add_argument('-r', "--use-repr", action="store_true",
                         help="When viewing, use repr() to display rather than str().")
     parser.add_argument("--noreloc", dest="reloc", action="store_false",

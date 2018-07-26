@@ -41,11 +41,12 @@ def compare_filesets(filelist1, filelist2, sort=False):
     #Turn all to lowercase and remove periods os.path.exists doesn't care about
     #these
     def demote(s):
-        prevDir, fName = os.path.split(s)
-        prevDir, artistDir = os.path.split(prevDir)
-        albumDir = os.path.basename(prevDir)
-        fName, ext = os.path.splitext(fName)
-        return os.path.join(albumDir, artistDir, "%s%s" % (fName, ext)).lower().replace('.', '')
+        return s.lower().replace('.', '')
+        # prevDir, fName = os.path.split(s)
+        # prevDir, artistDir = os.path.split(prevDir)
+        # albumDir = os.path.basename(prevDir)
+        # fName, ext = os.path.splitext(fName)
+        # return os.path.join(albumDir, artistDir, "%s%s" % (fName, ext)).lower().replace('.', '')
     
     return boolean_diff(filelist1, filelist2, demote, sort)
 

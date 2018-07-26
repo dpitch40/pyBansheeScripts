@@ -1,4 +1,5 @@
 import argparse
+from pprint import pprint
 import operator
 
 import db_glue
@@ -11,7 +12,8 @@ def check(db, table, fields):
     for row in rows:
         key = getter(row)
         if key in found:
-            print("DUPLICATE FOUND: %s\n%s" % (key, row))
+            print("DUPLICATE FOUND: %s" % str(key))
+            pprint(row)
         else:
             found.add(key)
 

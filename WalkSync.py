@@ -276,8 +276,8 @@ def track_sync(changes, dryrun, bitrate, size):
                     #    trackChanges.append(("tracknumber", str(track["TrackNumber"])))
                     # if track["Disc"] != 0:
                     #    trackChanges.append(("discnumber", str(track["Disc"])))
-                    if track["AlbumArtist"] is not None and track["AlbumArtist"] != track["Artist"]:
-                        trackChanges.append(("artist", track["AlbumArtist"]))
+                    # if track["AlbumArtist"] is not None and track["AlbumArtist"] != track["Artist"]:
+                    #     trackChanges.append(("artist", track["AlbumArtist"]))
                     if len(trackChanges) > 0:
                         audio = MP3(dest, ID3=EasyID3)
                         for tag, value in trackChanges:
@@ -294,10 +294,6 @@ def track_sync(changes, dryrun, bitrate, size):
                     os.makedirs(destDir)
             note("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
             if not dryrun:
-                if track["AlbumArtist"] is not None:
-                    artist = track["AlbumArtist"]
-                else:
-                    artist = track["Artist"]
                 track.encode(dest, bitrate)
             encoded += 1
         else:
