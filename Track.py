@@ -237,7 +237,7 @@ class Track(object):
             if not rows:
                 artist = kwargs.get("Artist", '')
                 album = kwargs.get("Album", '')
-                title = kwargs.get("Title", '')
+                trackNumber = kwargs.get("TrackNumber", '')
                 if fName and ext in supportedExtensions:
                     # Initialize MP3 object
                     audio = AudioFileInterface(fName)
@@ -245,17 +245,23 @@ class Track(object):
                         artist = audio["artist"][0]
                     if "album" in audio:
                         album = audio["album"][0]
-                    if "title" in audio:
-                        title = audio["title"][0]
-                rows = db.sql(selectStmt % "ca.Name = ? AND cl.Title = ? AND ct.Title = ?",
-                            artist, album, title)
+                    if "tracknumber" in audio:
+                        trackNumber = audio["tracknumber"][0]
+                rows = db.sql(selectStmt % "ca.Name = ? AND cl.Title = ? AND ct.TrackNumber = ?",
+                            artist, album, trackNumber)
+            #     if not rows:
+            #         pass
+            #     else:
+            #         print "Matched via album/artist/tracknum"
+            # else:
+            #     print "Matched via URI: %s" % uri
 
         self.matchedWithDB = len(rows) > 0
         if self.matchedWithDB:
             resultDict = rows[0]
-            resultDict["Location"] = db_glue.sql2pathname(resultDict["Uri"].encode("ascii"))
-            resultDict["Location"] = resultDict["Location"].decode(Config.UnicodeEncoding)
-            Util.debug("Setting location from DB: %s" % resultDict["Location"], moduleDebug)
+            # resultDict["Location"] = db_glue.sql2pathname(resultDict["Uri"].encode("ascii"))
+            # resultDict["Location"] = resultDict["Location"].decode(Config.UnicodeEncoding)
+            # Util.debug("Setting location from DB: %s" % resultDict["Location"], moduleDebug)
         else:
             if audio:
                 resultDict = BasicMetadata(audio)

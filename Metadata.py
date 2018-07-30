@@ -15,6 +15,7 @@ import Config
 Config.GroupArtists = False
 import Track
 from Track import TRACKLIST, DB, FILE
+from pprint import pprint
 
 db = db_glue.new(db_glue.defaultLoc)
 Track.db = db
@@ -114,7 +115,8 @@ def CreateTrackMapping(tracks):
     return trackMapping
 
 # Edits tracks
-def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
+def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None,
+         suffix=None):
     edited = 0
 
     # Are we getting the metadata from a source apart from the files themselves
@@ -139,6 +141,8 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
             matchKeys = ExtractKeys(track, index)
             for k in matchKeys:
                 if k in trackMapping:
+                    # print 'MATCHED %s with %s on %r' % \
+                    #     (track['Location'], trackMapping[k]['Location'], k)
                     return matchKeys, track, trackMapping[k]
             return matchKeys, track, None
         trackItr = itertools.imap(matchTrack, sorted(destTracks,
@@ -197,12 +201,16 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
             newName = changes["Location"]
         elif rebase:
             newName = rebase
-        elif track["Location"] != curName:
-            newName = track["Location"]
+        # elif track["Location"] != curName:
+        #     newName = track["Location"]
         else:
             base, ext = os.path.splitext(os.path.basename(curName))
             
             newName = track.getDestName(musicDir, ext, asUnicode=True)
+
+        if suffix:
+            newBase, newExt = os.path.splitext(newName)
+            newName = ''.join([newBase, suffix, newExt])
 
         if curName != newName and (relocate or rebase):
             relocated = (curName, newName)
@@ -228,12 +236,6 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
 
         if fileChanges or dbChanges or relocated:
             print track.name
-            if fileChanges:
-                print "  File: %s" % '\n\t'.join(["%s:\t%s -> %s" % (k, v[0], v[1]) for 
-                            k, v in sorted(fileChanges.items())])
-            if dbChanges and track.matchedWithDB:
-                print "  DB:   %s" % '\n\t'.join(["%s:\t%s -> %s" % (k, v[0], v[1]) for 
-                            k, v in sorted(dbChanges.items())])
 
             if rebase:
                 dbChanges["Uri"] = (oldUri, newUri)
@@ -245,6 +247,13 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None):
                     m += " (overwriting existing file)"
                     overwritten += 1
                 print m
+
+            if fileChanges:
+                print "  File: %s" % '\n\t'.join(["%s:\t%s -> %s" % (k, v[0], v[1]) for
+                            k, v in sorted(fileChanges.items())])
+            if dbChanges and track.matchedWithDB:
+                print "  DB:   %s" % '\n\t'.join(["%s:\t%s -> %s" % (k, v[0], v[1]) for
+                            k, v in sorted(dbChanges.items())])
 
             if "BitRate" in fileChanges:
                 print "  Reencoding from %d to %d bps" % (fileChanges["BitRate"])
@@ -489,6 +498,7 @@ def getTracks(parser, args, integrateChanges=False):
         if args.matchwithdb:
             sources.append(Track.DB)
         tracks = [Track.Track(sources, None, **t) for t in tl]
+
     tracks.sort(key=operator.itemgetter("Artist", "Album", "Disc", "TrackNumber"))
 
     if integrateChanges:
@@ -509,6 +519,7 @@ to files and/or synchronize metadata between files and the database."""
                         help="Disable automatic relocation of files.")
     parser.add_argument("--rebase", help="Change a track's source to this location.")
     parser.add_argument("action", nargs='?', choices=actionChoices, help="The action to take.")
+    parser.add_argument("--suffix")
     addDefaultArguments(parser)
 
     args = parser.parse_args()
@@ -523,7 +534,8 @@ to files and/or synchronize metadata between files and the database."""
         assert os.path.exists(args.rebase), "Must rebase to an existing file"
 
     if args.action == "edit":
-        Edit(tracks, fNames, changes, args.test, args.matchwithdb, args.reloc, args.rebase)
+        Edit(tracks, fNames, changes, args.test, args.matchwithdb, args.reloc, args.rebase,
+             args.suffix)
     elif args.action == "view":
         View(tracks, args.use_repr)
     else:
