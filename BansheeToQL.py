@@ -146,9 +146,11 @@ def sync_playlist(playlist):
     return dest, ''.join(contents)
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--dryrun', action='store_true')
-    parser.add_argument('-f', '--force', action='store_true')
+    parser = argparse.ArgumentParser(description='Sync song data and playlists from Banshee to Quod Libet.')
+    parser.add_argument('-t', '--dryrun', action='store_true', help='Only show the actions to be performed, '
+                            'and do not change any files.')
+    parser.add_argument('-f', '--force', action='store_true', help='Sync song data even if not all songs '
+                            'were matched.')
 
     args = parser.parse_args()
 

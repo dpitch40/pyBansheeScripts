@@ -481,7 +481,7 @@ class LibraryRegenerator(object):
         self.old_db.close()
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Run a variety of routines to clean up a Banshee library.')
 
     parser.add_argument('-t', "--target", help="The banshee.db library file to regenerate. Defaults to %s"
                             % DEFAULT_LIBRARY, default=DEFAULT_LIBRARY)

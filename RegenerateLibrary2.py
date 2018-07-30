@@ -81,7 +81,7 @@ def migrate_metadata(oldlib, newlib, dryrun):
             db.commit()
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Copy track metadata over from one Banshee library to another.')
 
     parser.add_argument('-t', "--dryrun", action="store_true")
     parser.add_argument("oldlib")
