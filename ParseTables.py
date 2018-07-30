@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 #regex for times
 timeRe = re.compile(r"(\d+):(\d{2})")
 # regex for the domain name of a url
-urlRe = re.compile(r"www\.([^\.]+)\.")
+urlRe = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.com")
 
 fieldOrdering = ["Title", "Artist", "AlbumArtist", "Album", "Genre", "Year", "Duration",
                     "TrackNumber", "TrackCount", "Disc", "DiscCount"]
@@ -77,7 +77,7 @@ def parseMATracklist(soup):
             tracks.append((trackTitle, trackLen, discNum))
         else:
             tracks.append((trackTitle, trackLen))
-    
+
     return tracks
 
 @registerParser("allmusic")
@@ -114,8 +114,26 @@ def parseAllMusictracklist(soup):
 
     return tracks
 
+@registerParser("bandcamp")
+def parseBandcampTracklist(soup):
+    name_section = soup.find('div', id='name-section')
+    album = next(name_section.find('h2', itemprop='name').stripped_strings)
+    artist = next(name_section.find('span', itemprop='byArtist').stripped_strings)
+    year = int(soup.find('meta', itemprop='datePublished')['content'][:4])
+
+    tracks = [(artist, album, year)]
+
+    track_table = soup.find('table', id='track_table')
+    for row in track_table.find_all('tr'):
+        # TODO: Support multiple discs
+        title = next(row.find('span', itemprop='name').stripped_strings)
+        time = parseTimeStr(next(row.find('span', class_='time').stripped_strings))
+        tracks.append((title, time))
+
+    return tracks
+
 def parseTracklistFromUrl(url):
-    domain = urlRe.search(url).group(1).lower()
+    domain = urlRe.match(url).group(1).lower()
     if domain not in domainParsers:
         raise KeyError, "No parser defined for domain %r" % domain
 
