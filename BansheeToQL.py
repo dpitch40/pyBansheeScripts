@@ -84,7 +84,7 @@ field_mappings = [
     rating_transform
 ]
 
-def match_tracks_to_songs(tracks, songs):
+def match_tracks_to_songs(tracks, songs, force):
     track_locations = [db_glue.sql2pathname(str(track["Uri"])).decode('utf8') for track in tracks]
     song_locations = [song['~filename'].decode("utf8") for song in songs]
     
@@ -94,7 +94,7 @@ def match_tracks_to_songs(tracks, songs):
         print "Unmatched track locations from Banshee:\n%s" % '\n'.join(extra_tracks)
     if extra_songs:
         print "Unmatched song locations from Quod Libet:\n%s" % '\n'.join(extra_songs)
-    if extra_tracks or extra_songs:
+    if not force and (extra_tracks or extra_songs):
         raise SystemExit
 
     mapping = dict()
@@ -121,6 +121,7 @@ def sync_track_to_song(track, song):
     for k, v in sorted(ql_track.items()):
         if k not in song or song[k] != v:
             changes[k] = v
+
     return changes
 
 def save_song_changes(songs):
@@ -147,6 +148,7 @@ def sync_playlist(playlist):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--dryrun', action='store_true')
+    parser.add_argument('-f', '--force', action='store_true')
 
     args = parser.parse_args()
 
@@ -154,11 +156,11 @@ def main():
 
     with open(ql_songs, 'rb') as fobj:
         songs = pickle.load(fobj)
-        songs.sort(key=lambda s: (s['artist'], s['album'],
+        songs.sort(key=lambda s: (s.get('artist', ''), s.get('album', ''),
                 int(s.get('disc', '1/1').split('/')[0]),
                 int(s.get('tracknumber', '1/1').split('/')[0])))
 
-    mapping = match_tracks_to_songs(tracks, songs)
+    mapping = match_tracks_to_songs(tracks, songs, args.force)
 
     changed = False
     for location, (track, song) in sorted(mapping.items()):

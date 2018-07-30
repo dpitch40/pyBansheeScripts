@@ -1,5 +1,8 @@
 *.pyc
 *.mp3
+*.txt
+*.tsv
+*.sql
 *.csv
 Old/
 Album.txt
