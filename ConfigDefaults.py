@@ -32,6 +32,7 @@ NumberTracks = True
 # "/A/Agalloch/"
 GroupArtists = True
 # Ignore "The" at the beginning of artist names when grouping artists
+# TODO: Change this to a list of ignored words
 IgnoreThe = True
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
@@ -48,3 +49,5 @@ DefaultEncodeExt = ".ogg"
 MP3Qual = 2
 # Timestamp format for display
 TsFmt = "%Y-%m-%d %H:%M:%S"
+# album_artist defaults to artist if not specified
+AlbumArtistDefault = True
