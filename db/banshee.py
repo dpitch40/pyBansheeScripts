@@ -26,8 +26,8 @@ update_stmt = """UPDATE CoreTracks SET %s WHERE TrackID = :TrackID"""
 class BansheeDb(MusicDb):
     """Class for metadata derived from a Banshee sqlite3 database."""
 
-    read_only_keys = ('bitrate', # Integer number of bits/second
-                      'length', # Float number of milliseconds,
+    read_only_keys = ('bitrate',
+                      'length',
                       'location',
                        # These fields are read-only for Banshee tracks (due to their being from linked tables)
                       'album',
@@ -53,8 +53,11 @@ class BansheeDb(MusicDb):
                 changes.append('%s = NULL' % trans_name)
 
         db.sql(update_stmt % ', '.join(changes), **self.row)
-        db.commit()
         self.sql_row = self.row.copy()
+
+    @classmethod
+    def commit(self):
+        db.commit()
 
     # Constructors for getting a track from the db
 

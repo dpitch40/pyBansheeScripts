@@ -1,3 +1,5 @@
+import os.path
+
 # Directory config variables - override these to be correct for your machine!
 
 # Location of the contents of the CD drive in the file system
@@ -8,6 +10,10 @@ MusicDir = "/path/to/your/music/collection"
 MediaDir = "/media/user_name"
 # Name of the device in which playlists are stored
 BaseDevice = "ROOT"
+# Banshee DB location
+BansheeDbLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
+# Quod Libet songs file location
+QLSongsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'songs'))
 
 
 

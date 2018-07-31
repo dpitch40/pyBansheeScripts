@@ -6,3 +6,7 @@ class MusicDb(Metadata, MappingWrapper):
 
     def __init__(self, d):
         MappingWrapper.__init__(self, d)
+
+    @classmethod
+    def commit(self):
+        raise NotImplementedError
