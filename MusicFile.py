@@ -1,8 +1,6 @@
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3, EasyID3KeyError
 
-delete = object()
-
 """EasyID3 tags:
    ['albumartistsort', 'musicbrainz_albumstatus', 'lyricist', 'musicbrainz_workid', 'releasecountry',
     'date', 'performer', 'musicbrainz_albumartistid', 'composer', 'catalognumber', 'encodedby',
@@ -37,13 +35,7 @@ class MP3File(MusicFile):
         super(MP3File, self).__init__(fname)
 
     def save(self):
-        if self.changes:
-            for key, change in sorted(self.changes.items()):
-                if change is delete:
-                    self._delete(key)
-                else:
-                    self._set(key, change)
-            self.audio.save()
+        self.audio.save()
 
     def _delete(self, key):
         del self.audio[key]
@@ -61,21 +53,15 @@ class MP3File(MusicFile):
         if mapped_key in self.audio:
             return self.audio[mapped_key]
         else:
-            raise AttributeError, key
+            raise AttributeError(key)
 
     def __setattr__(self, key, value):
         mapped_key = self._map_key(key)
-        if mapped_key in self.audio:
-            self.changes[key] = value
-        else:
-            raise AttributeError, key
+        self.audio[mapped_key] = value
 
     def __delattr__(self, key):
         mapped_key = self._map_key(key)
-        if mapped_key in self.audio:
-            self.changes[mapped_key] = delete
-        else:
-            raise AttributeError, key
+        del self.audio[mapped_key]
 
     # Track number
 
@@ -83,43 +69,41 @@ class MP3File(MusicFile):
     def tn(self):
         try:
             return int(self.audio['tracknumber'][0].split('/')[0])
-        except EasyID3KeyError:
+        except (EasyID3KeyError, IndexError):
             return None
 
     @tn.setter
     def tn(self, value):
-        try:
-            tn = self.audio['tracknumber']
-        except EasyID3KeyError:
-            return None
+        tc = self.tc
+        if tc:
+            self.audio['tracknumber'] = '%d/%d' % (value, tc)
         else:
-            if '/' in tn[0]:
-                tn, tc = tn[0].split('/')
-                new_tn = '%d/%s' % (value, tc)
-            else:
-                new_tn = '%d' % value
-            self.changes['tracknumber'] = new_tn
+            self.audio['tracknumber'] = '%d' % value
 
     @tn.deleter
     def tn(self):
-        if 'tracknumber' in self.audio:
-            self.changes['tracknumber'] = delete
-        else:
-            pass
+        del self.audio['tracknumber']
 
     # Track count
 
     @property
     def tc(self):
         try:
-            tracknum = self.audio['tracknumber'][0]
-        except EasyID3KeyError:
+            return int(self.audio['tracknumber'][0].split('/')[1])
+        except (EasyID3KeyError, IndexError):
             return None
-        else:
-            try:
-                return int(tracknum.split('/')[1])
-            except IndexError:
-                return None
+
+    @tn.setter
+    def tn(self, value):
+        tn = self.tn
+        if tn:
+            self.audio['tracknumber'] = '%d/%d' % (tn, value)
+
+    @tn.deleter
+    def tn(self):
+        tn = self.tn
+        if tn:
+            self.audio['tracknumber'] = '%d' % tn
 
     # Disc number
 
@@ -127,22 +111,41 @@ class MP3File(MusicFile):
     def dn(self):
         try:
             return int(self.audio['discnumber'][0].split('/')[0])
-        except EasyID3KeyError:
+        except (EasyID3KeyError, IndexError):
             return None
+
+    @dn.setter
+    def dn(self, value):
+        dc = self.dc
+        if dc:
+            self.audio['discnumber'] = '%d/%d' % (value, dc)
+        else:
+            self.audio['discnumber'] = '%d' % value
+
+    @dn.deleter
+    def dn(self):
+        del self.audio['discnumber']
 
     # Disc count
 
     @property
     def dc(self):
         try:
-            tracknum = self.audio['discnumber'][0]
-        except EasyID3KeyError:
+            return int(self.audio['discnumber'][0].split('/')[1])
+        except (EasyID3KeyError, IndexError):
             return None
-        else:
-            try:
-                return int(tracknum.split('/')[1])
-            except IndexError:
-                return None
+
+    @dn.setter
+    def dn(self, value):
+        dn = self.dn
+        if dn:
+            self.audio['discnumber'] = '%d/%d' % (dn, value)
+
+    @dn.deleter
+    def dn(self):
+        dn = self.dn
+        if dn:
+            self.audio['discnumber'] = '%d' % dn
 
 def main():
     import sys
