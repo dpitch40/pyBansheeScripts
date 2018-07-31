@@ -1,19 +1,21 @@
 # from mutagen import MutagenError
 
 import Config as Config
+from core.mw import MappingWrapper
 from mfile.mfile import MusicFile
 
-class MutagenFile(MusicFile):
+class MutagenFile(MusicFile, MappingWrapper):
 
-    tag_mapping = {'album_artist': 'albumartistsort',
-                   'album_artist_sort': 'albumartistsort',
-                   'album_sort': 'albumsort',
-                   'artist_sort': 'artistsort',
-                   'title_sort': 'titlesort'}
+    mapping = {'album_artist': 'albumartistsort',
+               'album_artist_sort': 'albumartistsort',
+               'album_sort': 'albumsort',
+               'artist_sort': 'artistsort',
+               'title_sort': 'titlesort'}
 
     def __init__(self, fname):
         self.audio = self.mutagen_class(fname)
-        super(MutagenFile, self).__init__(fname)
+        MusicFile.__init__(self, fname)
+        MappingWrapper.__init__(self, self.audio)
 
     def mutagen_class(self, fname):
         raise NotImplementedError
@@ -21,44 +23,13 @@ class MutagenFile(MusicFile):
     def save(self):
         self.audio.save()
 
-    def _delete(self, key):
-        del self.audio[key]
-
-    def _set(self, key, value):
-        if not isinstance(value, list):
-            value = [value]
-        self.audio[key] = value
-
-    def _map_key(self, key):
-        return self.tag_mapping.get(key, key)
-
     def __getattr__(self, key):
-        if key in self.all_keys:
-            mapped_key = self._map_key(key)
-            return self.audio.get(mapped_key, [None])[0]
-        else:
-            return super(MutagenFile, self).__getattr__(key)
+        value = MappingWrapper.__getattr__(self, key)
+        if key in self.all_keys and isinstance(value, list):
+            value = value[0]
+        return value
 
-    def __setattr__(self, key, value):
-        if key in self.all_keys:
-            # __setattr__ takes priority over descriptors, so we have to check if we need to use one
-            if isinstance(getattr(self.__class__, key, None), property):
-                super(MutagenFile, self).__setattr__(key, value)
-            else:
-                mapped_key = self._map_key(key)
-                self.audio[mapped_key] = value
-        else:
-            super(MutagenFile, self).__setattr__(key, value)
-
-    def __delattr__(self, key):
-        if key in self.all_keys:
-            # __delattr__ takes priority over descriptors, so we have to check if we need to use one
-            if isinstance(getattr(self.__class__, key, None), property):
-                super(MutagenFile, self).__delattr__(key, value)
-            else:
-                del self.audio[mapped_key]
-        else:
-            super(MutagenFile, self).__delattr__(key)
+    # Properties/descriptors
 
     @property
     def bitrate(self):
@@ -66,7 +37,7 @@ class MutagenFile(MusicFile):
 
     @property
     def length(self):
-        return self.audio.info.length
+        return self.audio.info.length * 1000
 
     @property
     def album_artist(self):

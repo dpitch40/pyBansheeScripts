@@ -141,3 +141,5 @@ class DB:
         self.sql("UPDATE %s SET %s WHERE %s" % 
                 (table, ','.join(["%s = :%s" % (k,k) for k in nonids.keys() if k in columns[table]]), 
                           ' AND '.join(["%s = :%s" % (k,k) for k in ids.keys()])), all_cols)
+
+db = new()
