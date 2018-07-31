@@ -1,6 +1,6 @@
 from mutagen.oggvorbis import OggVorbis
 
-from MutagenFileWrapper import MutagenFile
+from mfile.mutagen_wrapper import MutagenFile
 
 class OggFile(MutagenFile):
 

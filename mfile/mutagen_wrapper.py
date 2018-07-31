@@ -1,7 +1,7 @@
-from mutagen import MutagenError
+# from mutagen import MutagenError
 
-import Config
-from MusicFile import MusicFile
+import Config as Config
+from mfile.mfile import MusicFile
 
 class MutagenFile(MusicFile):
 
@@ -87,7 +87,7 @@ class MutagenFile(MusicFile):
     def year(self):
         try:
             return int(self.audio['date'][0])
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None
 
     @year.setter
@@ -109,7 +109,7 @@ class MutagenFile(MusicFile):
                 return int(tn), int(tc)
             else:
                 return int(tracknum), None
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None, None
 
     @tnc.setter
@@ -130,7 +130,7 @@ class MutagenFile(MusicFile):
     def tn(self):
         try:
             return int(self.audio['tracknumber'][0].split('/')[0])
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None
 
     @tn.setter
@@ -151,7 +151,7 @@ class MutagenFile(MusicFile):
     def tc(self):
         try:
             return int(self.audio['tracknumber'][0].split('/')[1])
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None
 
     @tc.setter
@@ -177,7 +177,7 @@ class MutagenFile(MusicFile):
                 return int(dn), int(dc)
             else:
                 return int(discnum), None
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None, None
 
     @dnc.setter
@@ -198,7 +198,7 @@ class MutagenFile(MusicFile):
     def dn(self):
         try:
             return int(self.audio['discnumber'][0].split('/')[0])
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None
 
     @dn.setter
@@ -219,7 +219,7 @@ class MutagenFile(MusicFile):
     def dc(self):
         try:
             return int(self.audio['discnumber'][0].split('/')[1])
-        except (MutagenError, IndexError):
+        except (KeyError, IndexError):
             return None
 
     @dc.setter

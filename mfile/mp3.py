@@ -1,7 +1,7 @@
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 
-from MutagenFileWrapper import MutagenFile
+from mfile.mutagen_wrapper import MutagenFile
 
 class MP3File(MutagenFile):
 

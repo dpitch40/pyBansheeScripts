@@ -1,7 +1,7 @@
 import os.path
 import six
 
-dest = os.path.join(os.path.dirname("__file__"), "ConfigUser.py")
+dest = os.path.join(os.path.dirname(__file__), "ConfigUser.py")
 
 if not os.path.exists(dest):
     with open(dest, 'w') as fObj:
