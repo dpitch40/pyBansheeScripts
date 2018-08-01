@@ -3,6 +3,8 @@ import abc
 from core.mw import MappingWrapper
 
 class Metadata(abc.ABC, MappingWrapper):
+    # TODO: Make this concrete to use with tracklists?
+
     """Base class for all objects that provide access to song metadata."""
     all_keys = ('album_artist',
                 'album_artist_sort',
