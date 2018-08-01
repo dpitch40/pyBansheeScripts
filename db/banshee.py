@@ -10,7 +10,8 @@ cl.ArtistName AS album_artist, cl.ArtistNameSort AS album_artist_sort, ct.Genre 
 ct.TrackNumber AS tn, ct.TrackCount AS tc, ct.Disc AS dn, ct.DiscCount AS dc,
 ct.Uri AS Uri, ct.Duration AS length, ct.BitRate AS bitrate
 FROM CoreTracks ct
-JOIN CoreAlbums cl ON ct.AlbumID = cl.AlbumID, CoreArtists ca ON ct.ArtistID = ca.ArtistID%s"""
+JOIN CoreAlbums cl ON ct.AlbumID = cl.AlbumID, CoreArtists ca ON ct.ArtistID = ca.ArtistID%(where)s
+ORDER BY album_artist, artist, album, dn, tn"""
 
 field_mapping = {'title': 'Title',
                  'title_sort': 'TitleSort',
@@ -28,7 +29,6 @@ class BansheeDb(MusicDb):
 
     read_only_keys = ('bitrate',
                       'length',
-                      'location',
                        # These fields are read-only for Banshee tracks (due to their being from linked tables)
                       'album',
                       'album_sort',
@@ -56,8 +56,12 @@ class BansheeDb(MusicDb):
         self.sql_row = self.row.copy()
 
     @classmethod
-    def commit(self):
+    def commit(cls):
         db.commit()
+
+    @classmethod
+    def load_all(cls):
+        return db.sql(select_stmt % {'where': ''})
 
     # Constructors for getting a track from the db
 
@@ -78,7 +82,11 @@ class BansheeDb(MusicDb):
 
     @classmethod
     def from_trackid(cls, id_):
-        return cls._from_sql(select_stmt % " WHERE ct.TrackID = ?", id_)
+        return cls._from_sql(select_stmt % {'where': " WHERE ct.TrackID = ?"}, id_)
+
+    @classmethod
+    def from_location(cls, loc):
+        return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
 
     # Properties/descriptors
 
@@ -93,6 +101,10 @@ class BansheeDb(MusicDb):
     @property
     def location(self):
         return db_glue.sql2pathname(self.row['Uri'])
+
+    @location.setter
+    def location(self, value):
+        self.row['Uri'] = db_glue.pathname2sql(value)
 
     @property
     def tnc(self):
@@ -124,10 +136,15 @@ class BansheeDb(MusicDb):
 
 def main():
     import sys
-    track = BansheeDb.from_trackid(int(sys.argv[1]))
+    # track = BansheeDb.from_trackid(int(sys.argv[1]))
     # track.tc = 13
-    print(repr(track))
+    # print(repr(track))
     # track.save()
+
+    tracks = BansheeDb.load_all()
+    print(len(tracks))
+    for track in tracks[:5]:
+        print(repr(track))
 
 if __name__ == '__main__':
     main()
