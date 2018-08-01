@@ -27,6 +27,9 @@ class Metadata(abc.ABC, MappingWrapper):
 
     read_only_keys = ('bitrate', 'length', 'location')
 
+    def __init__(self, d):
+        MappingWrapper.__init__(self, d)
+
     @abc.abstractmethod
     def save(self):
         raise NotImplementedError

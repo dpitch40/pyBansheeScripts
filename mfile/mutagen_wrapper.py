@@ -14,8 +14,7 @@ class MutagenFile(MusicFile):
 
     def __init__(self, fname):
         self.audio = self.mutagen_class(fname)
-        MusicFile.__init__(self, fname)
-        MappingWrapper.__init__(self, self.audio)
+        MusicFile.__init__(self, fname, self.audio)
 
     def mutagen_class(self, fname):
         raise NotImplementedError

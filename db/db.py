@@ -7,7 +7,7 @@ class MusicDb(Metadata):
     read_only_keys = ('bitrate', 'length') # Location not read-only
 
     def __init__(self, d):
-        MappingWrapper.__init__(self, d)
+        Metadata.__init__(self, d)
 
     @classmethod
     def commit(self):
