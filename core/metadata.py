@@ -1,7 +1,8 @@
 import pprint
 import abc
+from core.mw import MappingWrapper
 
-class Metadata(abc.ABC):
+class Metadata(abc.ABC, MappingWrapper):
     """Base class for all objects that provide access to song metadata."""
     all_keys = ('album_artist',
                 'album_artist_sort',

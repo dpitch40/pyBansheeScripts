@@ -4,7 +4,7 @@ import Config as Config
 from core.mw import MappingWrapper
 from mfile.mfile import MusicFile
 
-class MutagenFile(MusicFile, MappingWrapper):
+class MutagenFile(MusicFile):
 
     mapping = {'album_artist': 'albumartistsort',
                'album_artist_sort': 'albumartistsort',
