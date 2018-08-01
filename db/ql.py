@@ -1,4 +1,4 @@
-import pickle
+from quodlibet.formats import load_audio_files, dump_audio_files
 
 import Config
 
@@ -10,7 +10,8 @@ class QLSongs(object):
 
     def _load_songs(self):
         with open(songs_loc, 'rb') as fobj:
-            songs = pickle.load(fobj)
+            data = fobj.read()
+        songs = load_audio_files(data)
         return songs
 
     @property
@@ -33,8 +34,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-import pickle
-with open('songs', 'rb') as fobj:
-    songs = pickle.load(fobj)
-    print(len(songs))

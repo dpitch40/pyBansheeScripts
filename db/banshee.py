@@ -61,7 +61,7 @@ class BansheeDb(MusicDb):
 
     @classmethod
     def load_all(cls):
-        return db.sql(select_stmt % {'where': ''})
+        return [cls(row) for row in db.sql(select_stmt % {'where': ''})]
 
     # Constructors for getting a track from the db
 
