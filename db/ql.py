@@ -59,12 +59,13 @@ class QLDb(MusicDb):
                'title_sort': 'titlesort',
                'year': 'date',
                'location': '~filename',
+               'play_count': '~#playcount',
+               'skip_count': '~#skipcount',
         }
 
     def __init__(self, song):
         super(MusicDb, self).__init__(song)
         self.song = song
-        print(song)
 
     def save(self):
         pass
@@ -88,8 +89,6 @@ class QLDb(MusicDb):
     last_played = date_descriptor('~#lastplayed')
     last_skipped = date_descriptor('~#lastskipped')
     year = int_descriptor('date')
-    play_count = int_descriptor('~#playcount')
-    skip_count = int_descriptor('~#skipcount')
     rating = make_descriptor_func(lambda x: int(x * 5), lambda x: x / 5)('~#rating')
     length = make_descriptor_func(lambda x: int(x * 1000))('~#length')
     bitrate = make_descriptor_func(lambda x: x * 1000)('~#bitrate')
@@ -100,6 +99,7 @@ class QLDb(MusicDb):
 def main():
     import sys
     track = QLDb.from_location(sys.argv[1])
+    print(track.song)
     print(track)
     # for song in QLDb.load_all()[:7]:
     #     print(song)
