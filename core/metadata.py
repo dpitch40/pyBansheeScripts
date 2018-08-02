@@ -1,10 +1,7 @@
 import pprint
-import abc
 from core.mw import MappingWrapper
 
-class Metadata(abc.ABC, MappingWrapper):
-    # TODO: Make this concrete to use with tracklists?
-
+class Metadata(MappingWrapper):
     """Base class for all objects that provide access to song metadata."""
     all_keys = ('album_artist',
                 'album_artist_sort',
@@ -22,19 +19,13 @@ class Metadata(abc.ABC, MappingWrapper):
                 'tn', # int
                 'tnc', # (int, int)
                 'year', # int,
-                'bitrate', # Integer number of bits/second
                 'length', # Float number of milliseconds
-                'location',
                 )
 
-    read_only_keys = ('bitrate', 'length', 'location')
+    read_only_keys = ('length',)
 
     def __init__(self, d):
         MappingWrapper.__init__(self, d)
-
-    @abc.abstractmethod
-    def save(self):
-        raise NotImplementedError
 
     def __repr__(self):
         d = dict([(k, getattr(self, k)) for k in self.all_keys])
