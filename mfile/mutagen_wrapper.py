@@ -13,21 +13,9 @@ class MutagenFile(MusicFile):
                'artist_sort': 'artistsort',
                'title_sort': 'titlesort'}
 
-    format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length).3fs\t%(bitrate)skbps',
-                    '%(location)s']
-
     def __init__(self, fname):
         self.audio = self.mutagen_class(fname)
         MusicFile.__init__(self, fname, self.audio)
-
-    def _format_dict(self):
-        d = super(MutagenFile, self)._format_dict()
-        if d['bitrate']:
-            d['bitrate'] = d['bitrate'] / 1000
-            if d['bitrate'] % 1 == 0:
-                d['bitrate'] = int(d['bitrate'])
-        return d
 
     def mutagen_class(self, fname):
         raise NotImplementedError
