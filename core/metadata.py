@@ -22,8 +22,6 @@ class Metadata(MappingWrapper):
                 'length', # Float number of milliseconds
                 )
 
-    read_only_keys = ('length',)
-
     def __init__(self, d):
         MappingWrapper.__init__(self, d)
 

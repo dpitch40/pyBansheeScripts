@@ -15,7 +15,7 @@ class MusicDb(abc.ABC, Metadata):
                                     'last_skipped',
                                     'date_added')
 
-    read_only_keys = Metadata.read_only_keys + ('bitrate',) # Location not read-only
+    read_only_keys = ('bitrate', 'length') # Location not read-only
 
     def __init__(self, d):
         super(MusicDb, self).__init__(d)

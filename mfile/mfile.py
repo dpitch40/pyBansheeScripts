@@ -7,8 +7,9 @@ class MusicFile(abc.ABC, Metadata):
 
     all_keys = Metadata.all_keys + ('location', # File location
                                     'bitrate') # Integer number of bits/second
-    read_only_keys = Metadata.read_only_keys + ('location',
-                                                'bitrate')
+    read_only_keys = ('length',
+                      'location',
+                      'bitrate')
 
     def __init__(self, fname, d):
         self.fname = fname
