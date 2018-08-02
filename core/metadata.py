@@ -24,8 +24,8 @@ class Metadata(MappingWrapper):
                 'length', # Float/Int number of milliseconds
                 )
 
-    format_lines = ['%(title)s - %(artist)s - %(genre)s - %(length)d',
-                    '%(album)s - %(album_artist)s - %(year)d\t%(tn)d/%(tc)d\t%(dn)d/%(dc)d']
+    format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
+                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length).3fs']
 
     def __init__(self, d):
         MappingWrapper.__init__(self, d)
@@ -33,8 +33,14 @@ class Metadata(MappingWrapper):
     def _to_dict(self):
         return dict([(k, getattr(self, k)) for k in self.all_keys])
 
-    def __str__(self):
+    def _format_dict(self):
         d = self._to_dict()
+        if d['length']:
+            d['length'] = d['length'] / 1000
+        return d
+
+    def __str__(self):
+        d = self._format_dict()
         for k, v in d.items():
             if v is None:
                 d[k] = ''

@@ -141,7 +141,7 @@ def main():
     import datetime
     track = BansheeDb.from_location(sys.argv[1])
 
-    print(repr(track))
+    print(track)
 
     # del track.title_sort
     # del track.last_skipped

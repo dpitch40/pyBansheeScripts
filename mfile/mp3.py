@@ -29,7 +29,7 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
-    print(repr(mp3))
+    print(mp3)
     # mp3.save()
 
 if __name__ == '__main__':

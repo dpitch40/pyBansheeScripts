@@ -18,7 +18,7 @@ def main():
     # ogg.genre = 'Pop/Electronic'
     # ogg.year = 2018
     # ogg.title = 'Heaven/Hell'
-    print(repr(ogg))
+    print(ogg)
     # ogg.save()
 
 if __name__ == '__main__':

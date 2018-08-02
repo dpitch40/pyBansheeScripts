@@ -3,6 +3,8 @@ import abc
 
 class MusicFile(abc.ABC, Metadata):
 
+    sigil = '%'
+
     """Base class for metadata derived from a music file."""
 
     all_keys = Metadata.all_keys + ('location', # File location
