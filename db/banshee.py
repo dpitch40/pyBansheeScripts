@@ -1,7 +1,7 @@
 from db.db import MusicDb
 import db_glue
 
-from core.util import date_descriptor
+from core.util import date_descriptor, make_descriptor_func
 
 db = db_glue.db
 
@@ -100,22 +100,9 @@ class BansheeDb(MusicDb):
 
     # Properties/descriptors
 
-    @property
-    def bitrate(self):
-        return self.row['bitrate'] * 1000
-
-    @property
-    def length(self):
-        return self.row['length'] / 1000
-
-    @property
-    def location(self):
-        return db_glue.sql2pathname(self.row['Uri'])
-
-    @location.setter
-    def location(self, value):
-        self.row['Uri'] = db_glue.pathname2sql(value)
-
+    bitrate = make_descriptor_func(lambda x: int(x * 1000))('bitrate')
+    length = make_descriptor_func(lambda x: x)('length')
+    location = make_descriptor_func(db_glue.sql2pathname, db_glue.pathname2sql)('Uri')
     date_added = date_descriptor('date_added')
     last_played = date_descriptor('last_played')
     last_skipped = date_descriptor('last_skipped')
