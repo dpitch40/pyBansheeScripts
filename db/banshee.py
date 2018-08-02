@@ -1,6 +1,8 @@
 from db.db import MusicDb
 import db_glue
 
+from .util import date_descriptor
+
 db = db_glue.db
 
 # Statement template used to pull everything useful from the sqlite database
@@ -8,7 +10,9 @@ select_stmt = """SELECT ct.TrackID AS TrackID, ct.Title AS title, ct.TitleSort A
 ca.Name AS artist, ca.NameSort AS artist_sort, cl.Title AS album, cl.TitleSort AS album_sort,
 cl.ArtistName AS album_artist, cl.ArtistNameSort AS album_artist_sort, ct.Genre AS genre, ct.Year AS year,
 ct.TrackNumber AS tn, ct.TrackCount AS tc, ct.Disc AS dn, ct.DiscCount AS dc,
-ct.Uri AS Uri, ct.Duration AS length, ct.BitRate AS bitrate
+ct.Uri AS Uri, ct.Duration AS length, ct.BitRate AS bitrate, ct.Rating AS rating,
+ct.PlayCount AS play_count, ct.SkipCount AS skip_count, ct.DateAddedStamp AS date_added,
+ct.LastPlayedStamp AS last_played, ct.LastSkippedStamp AS last_skipped
 FROM CoreTracks ct
 JOIN CoreAlbums cl ON ct.AlbumID = cl.AlbumID, CoreArtists ca ON ct.ArtistID = ca.ArtistID%(where)s
 ORDER BY album_artist, artist, album, dn, tn"""
@@ -20,7 +24,13 @@ field_mapping = {'title': 'Title',
                  'tn': 'TrackNumber',
                  'tc': 'TrackCount',
                  'dn': 'Disc',
-                 'dc': 'DiscCount'}
+                 'dc': 'DiscCount',
+                 'rating': 'Rating',
+                 'play_count': 'PlayCount',
+                 'skip_count': 'SkipCount',
+                 'date_added': 'DateAddedStamp',
+                 'last_played': 'LastPlayedStamp',
+                 'last_skipped': 'LastSkippedStamp'}
 
 update_stmt = """UPDATE CoreTracks SET %s WHERE TrackID = :TrackID"""
 
@@ -106,6 +116,10 @@ class BansheeDb(MusicDb):
     def location(self, value):
         self.row['Uri'] = db_glue.pathname2sql(value)
 
+    date_added = date_descriptor('date_added')
+    last_played = date_descriptor('last_played')
+    last_skipped = date_descriptor('last_skipped')
+
     @property
     def tnc(self):
         return (getattr(self, 'tn', None), getattr(self, 'tc', None))
@@ -136,15 +150,17 @@ class BansheeDb(MusicDb):
 
 def main():
     import sys
-    # track = BansheeDb.from_trackid(int(sys.argv[1]))
-    # track.tc = 13
-    # print(repr(track))
+    import datetime
+    track = BansheeDb.from_location(sys.argv[1])
+    print(repr(track))
+    # track.last_skipped = None#datetime.datetime(2014, 5, 21, 7, 41, 12)
     # track.save()
+    # track.commit()
 
-    tracks = BansheeDb.load_all()
-    print(len(tracks))
-    for track in tracks[:5]:
-        print(repr(track))
+    # tracks = BansheeDb.load_all()
+    # print(len(tracks))
+    # for track in tracks[:5]:
+    #     print(repr(track))
 
 if __name__ == '__main__':
     main()

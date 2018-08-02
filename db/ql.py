@@ -1,5 +1,6 @@
 from quodlibet.formats import load_audio_files, dump_audio_files
 
+from db.db import MusicDb
 import Config
 
 songs_loc = Config.QLSongsLoc
@@ -26,6 +27,11 @@ class QLSongs(object):
                 assert False, "%s contains multiple songs with the filename %s" % (songs_loc, location)
             self._locations_to_songs[location] = song
 
+    def location_to_song(self, loc):
+        if self._songs is None:
+            self._load_songs()
+        return self._locations_to_songs[loc]
+
     @property
     def songs(self):
         if self._songs is None:
@@ -34,16 +40,34 @@ class QLSongs(object):
 
 qls = QLSongs()
 
+class QLDb(MusicDb):
+
+    def __init__(self, song):
+        super(MusicDb, self).__init__(song)
+        self.song = song
+        print(self.song)
+
+    def save(self):
+        raise NotImplementedError
+
+    @classmethod
+    def commit(cls):
+        raise NotImplementedError
+
+    @classmethod
+    def load_all(cls):
+        raise NotImplementedError
+
+    @classmethod
+    def from_location(cls, loc):
+        try:
+            return cls(qls.location_to_song(loc))
+        except KeyError as e:
+            raise KeyError('No song with liocation %r exists in the songs library' % loc) from e
 
 def main():
-    qls.songs
-    print(len(qls._locations_to_songs))
-
-    # import sys
-    # track = BansheeDb.from_trackid(int(sys.argv[1]))
-    # track.tc = 13
-    # print(repr(track))
-    # track.save()
+    import sys
+    track = QLDb.from_location(sys.argv[1])
 
 if __name__ == '__main__':
     main()
