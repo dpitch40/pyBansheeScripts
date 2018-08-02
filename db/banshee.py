@@ -1,7 +1,7 @@
 from db.db import MusicDb
 import db_glue
 
-from .util import date_descriptor
+from core.util import date_descriptor
 
 db = db_glue.db
 

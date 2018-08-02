@@ -1,7 +1,10 @@
+import operator
+
 from quodlibet.formats import load_audio_files, dump_audio_files
 
-from db.db import MusicDb
+from .db import MusicDb
 import Config
+from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
 
 songs_loc = Config.QLSongsLoc
 
@@ -14,6 +17,8 @@ class QLSongs(object):
         with open(songs_loc, 'rb') as fobj:
             data = fobj.read()
         songs = load_audio_files(data)
+        songs.sort(key=lambda x: (x.get('albumartist', ''), x.get('artist', ''), x.get('album', ''),
+                                  x.get('discnumber', ''), x.get('tracknumber', '')))
         self._load_locations_to_songs(songs)
 
         return songs
@@ -38,36 +43,66 @@ class QLSongs(object):
             self._songs = self._load_songs()
         return self._songs
 
+    def save_songs(self):
+        data = dump_audio_files(self._songs)
+        with open(songs_loc, 'wb') as fobj:
+            fobj.write(data)
+
 qls = QLSongs()
 
 class QLDb(MusicDb):
 
+    mapping = {'album_artist': 'albumartist',
+               'album_artist_sort': 'albumartistsort',
+               'album_sort': 'albumsort',
+               'artist_sort': 'artistsort',
+               'title_sort': 'titlesort',
+               'year': 'date',
+               'location': '~filename',
+        }
+
     def __init__(self, song):
         super(MusicDb, self).__init__(song)
         self.song = song
-        print(self.song)
+        print(song)
 
     def save(self):
-        raise NotImplementedError
+        pass
 
     @classmethod
     def commit(cls):
-        raise NotImplementedError
+        qls.save_songs()
 
     @classmethod
     def load_all(cls):
-        raise NotImplementedError
+        return qls.songs
 
     @classmethod
     def from_location(cls, loc):
         try:
             return cls(qls.location_to_song(loc))
         except KeyError as e:
-            raise KeyError('No song with liocation %r exists in the songs library' % loc) from e
+            raise KeyError('No song with location %r exists in the songs library' % loc) from e
+
+    date_added = date_descriptor('~#added')
+    last_played = date_descriptor('~#lastplayed')
+    last_skipped = date_descriptor('~#lastskipped')
+    year = int_descriptor('date')
+    play_count = int_descriptor('~#playcount')
+    skip_count = int_descriptor('~#skipcount')
+    rating = make_descriptor_func(lambda x: int(x * 5), lambda x: x / 5)('~#rating')
+    length = make_descriptor_func(lambda x: int(x * 1000))('~#length')
+    bitrate = make_descriptor_func(lambda x: x * 1000)('~#bitrate')
+
+    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
+    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
 
 def main():
     import sys
     track = QLDb.from_location(sys.argv[1])
+    print(track)
+    # for song in QLDb.load_all()[:7]:
+    #     print(song)
 
 if __name__ == '__main__':
     main()
