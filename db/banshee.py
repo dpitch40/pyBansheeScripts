@@ -62,8 +62,9 @@ class BansheeDb(MusicDb):
             elif name in self.sql_row:
                 changes.append('%s = NULL' % trans_name)
 
-        db.sql(update_stmt % ', '.join(changes), **self.row)
-        self.sql_row = self.row.copy()
+        if changes:
+            db.sql(update_stmt % ', '.join(changes), **self.row)
+            self.sql_row = self.row.copy()
 
     @classmethod
     def commit(cls):
@@ -123,31 +124,32 @@ class BansheeDb(MusicDb):
 
     @property
     def dnc(self):
-        return (getattr(self, 'dc', None), getattr(self, 'dc', None))
+        return (getattr(self, 'dn', None), getattr(self, 'dc', None))
 
     @dnc.setter
     def dnc(self, value):
-        dc, dc = value
-        self.dc = dc
+        dn, dc = value
+        self.dn = dn
         self.dc = dc
 
     @dnc.deleter
     def dnc(self):
-        self.dc, self.dc = None, None
+        self.dn, self.dc = None, None
 
 def main():
     import sys
     import datetime
     track = BansheeDb.from_location(sys.argv[1])
+
     print(repr(track))
-    # track.last_skipped = None#datetime.datetime(2014, 5, 21, 7, 41, 12)
+
+    # del track.title_sort
+    # del track.last_skipped
+    # del track.dnc
+    # track.year = 1998
+    # track.rating = 0
     # track.save()
     # track.commit()
-
-    # tracks = BansheeDb.load_all()
-    # print(len(tracks))
-    # for track in tracks[:5]:
-    #     print(repr(track))
 
 if __name__ == '__main__':
     main()

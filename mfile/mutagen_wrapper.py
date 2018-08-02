@@ -54,7 +54,7 @@ class MutagenFile(MusicFile):
         self.audio['albumartistsort'] = value
 
     @album_artist.deleter
-    def album_artist(self, value):
+    def album_artist(self):
         del self.audio['albumartistsort']
 
     year = int_descriptor('date')

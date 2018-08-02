@@ -54,7 +54,7 @@ class MappingWrapper(object):
                 raise NotAllowedError('%s is read-only' % key)
             # __delattr__ takes priority over descriptors, so we have to check if we need to use one
             if isinstance(getattr(self.__class__, key, None), property):
-                super(MappingWrapper, self).__delattr__(key, value)
+                super(MappingWrapper, self).__delattr__(key)
             else:
                 mapped_key = self._map_key(key)
                 self.del_item(mapped_key)

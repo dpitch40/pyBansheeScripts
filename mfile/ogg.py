@@ -11,12 +11,13 @@ def main():
     import sys
     ogg = OggFile(sys.argv[1])
 
-    # ogg.dnc = (1, 5)
-    # ogg.tn = 1
-    # ogg.tc = 2
-    # ogg.album_artist_sort = 'agallach'
-    # ogg.year = 2009
-    # ogg.title = 'A Poem by Keats'
+    # del ogg.dnc
+    # ogg.tn = 9
+    # ogg.tc = 13
+    # del ogg.album_artist
+    # ogg.genre = 'Pop/Electronic'
+    # ogg.year = 2018
+    # ogg.title = 'Heaven/Hell'
     print(repr(ogg))
     # ogg.save()
 

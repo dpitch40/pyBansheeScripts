@@ -23,12 +23,12 @@ class MP3File(MutagenFile):
 def main():
     import sys
     mp3 = MP3File(sys.argv[1])
-    # mp3.dnc = (1, 5)
-    # mp3.tn = 1
-    # mp3.tc = 2
-    # mp3.album_artist_sort = 'agallach'
-    # mp3.year = 2011
-    # mp3.title = 'A Poem by Keats'
+    # mp3.dnc = (2, 2)
+    # mp3.tn = 2
+    # mp3.tc = 10
+    # del mp3.album_artist
+    # mp3.year = 2010
+    # mp3.title = 'A Poem by Yeats'
     print(repr(mp3))
     # mp3.save()
 

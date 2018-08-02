@@ -34,7 +34,7 @@ class QLSongs(object):
 
     def location_to_song(self, loc):
         if self._songs is None:
-            self._load_songs()
+            self._songs = self._load_songs()
         return self._locations_to_songs[loc]
 
     @property
@@ -44,9 +44,10 @@ class QLSongs(object):
         return self._songs
 
     def save_songs(self):
-        data = dump_audio_files(self._songs)
-        with open(songs_loc, 'wb') as fobj:
-            fobj.write(data)
+        if self._songs is not None:
+            data = dump_audio_files(self._songs)
+            with open(songs_loc, 'wb') as fobj:
+                fobj.write(data)
 
 qls = QLSongs()
 
@@ -98,11 +99,21 @@ class QLDb(MusicDb):
 
 def main():
     import sys
+    import datetime
     track = QLDb.from_location(sys.argv[1])
-    print(track.song)
+
     print(track)
-    # for song in QLDb.load_all()[:7]:
-    #     print(song)
+
+    # del track.last_played
+    # track.tnc = (1, 8)
+    # track.dc = 2
+    # del track.skip_count
+    # track.year = 2008
+    # track.genre = 'Progressive Metal'
+    # track.date_added = datetime.datetime(2017, 8, 8, 11, 16, 31)
+    # track.album = '01011001'
+    # track.save()
+    # track.commit()
 
 if __name__ == '__main__':
     main()
