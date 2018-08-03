@@ -3,10 +3,10 @@ import operator
 from quodlibet.formats import load_audio_files, dump_audio_files
 
 from .db import MusicDb
-import Config
+import config
 from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
 
-songs_loc = Config.QLSongsLoc
+songs_loc = config.QLSongsLoc
 
 class QLSongs(object):
     def __init__(self):

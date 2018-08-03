@@ -1,5 +1,5 @@
 from db.db import MusicDb
-import db_glue
+from .db_glue import db
 
 from core.util import date_descriptor, make_descriptor_func
 

@@ -5,11 +5,11 @@ import os.path
 import os
 import re
 import operator
-import Config
+import config
 
 from six.moves.urllib.request import url2pathname, pathname2url
 
-defaultLoc = Config.BansheeDbLoc
+defaultLoc = config.BansheeDbLoc
 
 # Characters to escape when converting to SQL-compatible strings
 PATHNAME_CHARS = "~!@$&*()-_=+:',."

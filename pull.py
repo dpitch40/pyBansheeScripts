@@ -1,6 +1,5 @@
 import csv
 import argparse
-import Config
 import os.path
 
 from parse.file import read_tracklist, write_tracklist

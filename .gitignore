@@ -9,5 +9,5 @@ Old/
 Album.txt
 NeededAlbums.txt
 Test.py
-ConfigUser.py
+config/user.py
 Auto/

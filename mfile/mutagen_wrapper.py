@@ -1,6 +1,6 @@
 # from mutagen import MutagenError
 
-import Config as Config
+import config
 from core.mw import MappingWrapper
 from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
 from mfile.mfile import MusicFile
@@ -45,7 +45,7 @@ class MutagenFile(MusicFile):
     @property
     def album_artist(self):
         aa = self.__getattr__('album_artist')
-        if aa is None and Config.AlbumArtistDefault:
+        if aa is None and config.AlbumArtistDefault:
             aa = self.__getattr__('artist')
         return aa
 
