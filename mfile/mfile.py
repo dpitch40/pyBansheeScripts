@@ -7,8 +7,8 @@ class MusicFile(abc.ABC, Metadata):
 
     """Base class for metadata derived from a music file."""
 
-    all_keys = Metadata.all_keys + ('location', # File location
-                                    'bitrate') # Integer number of bits/second
+    all_keys = Metadata.all_keys + ('bitrate', # Integer number of bits/second
+                                    'location') # File location
     read_only_keys = ('length',
                       'location',
                       'bitrate')

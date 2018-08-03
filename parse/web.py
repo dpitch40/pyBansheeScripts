@@ -3,8 +3,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from core.metadata import Metadata
-from .util import parse_time_str
+from .util import parse_time_str, convert_to_tracks
 
 # regex for the domain name of a url
 url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.com")
@@ -20,36 +19,6 @@ def register_parser(site):
         parsers[site] = func
         return func
     return _inner
-
-def convert_to_tracks(info_list, **kwargs):
-    disc_num = None
-    track_num = 1
-    tracks_per_disc = dict()
-    tracks = list()
-    for track_info in info_list:
-        if track_info[2] != disc_num:
-            if disc_num is not None:
-                tracks_per_disc[disc_num] = track_num - 1
-            track_num = 1
-        title, length, disc_num = track_info
-        length = parse_time_str(length)
-        if length is not None:
-            length *= 1000
-
-        d = {'title': title,
-             'length': length,
-             'tn': track_num,
-             'dn': disc_num}
-        d.update(kwargs)
-        tracks.append(Metadata(d))
-        track_num += 1
-
-    tracks_per_disc[disc_num] = track_num - 1
-    for track in tracks:
-        track.tc = tracks_per_disc[track.dn]
-        track.dc = disc_num
-
-    return tracks
 
 @register_parser("metal-archives")
 def parse_ma_tracklist(soup):

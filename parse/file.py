@@ -1,38 +1,80 @@
-# import Util
-# import csv
+import os.path
+import csv
+from io import StringIO
+from collections import defaultdict
+from collections.abc import Iterable
+from core.metadata import Metadata
+from .util import convert_str_value, convert_to_tracks, parse_time_str
 
-# strKeys = set(["Title", "Artist", "Album", "Genre", "AlbumArtist"])
+strKeys = {'album_artist', 'album_artist_sort', 'album', 'album_sort', 'artist', 'artist_sort',
+           'genre', 'title', 'title_sort'}
 
-# def readSimpleTrackList(fname):
-#     """Reads a tracklist consisting of a row of metadata followed 
-# by rows of track data."""
-#     with open(fname, 'r') as f:
-#         reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
-#         tracklist = [reader.next()]
-#         for row in reader:
-#             if len(row) > 1:
-#                 seconds = parseTimeStr(row[1])
-#                 if seconds is not None:
-#                     row[1] = seconds
-#                 else:
-#                     row[1] = 0
-#                 # Disc num
-#                 if len(row) == 3:
-#                     row[2] = int(row[2])
-#             else:
-#                 row.append(0)
-#             tracklist.append(row)
-#     return tracklist
+def to_str_value(v):
+    if v is None or (isinstance(v, Iterable) and all(sv is None for sv in v)):
+        return ''
+    else:
+        return str(v)
 
-# # Reads a track list from a file
-# def readAugmentedTrackList(fName):
-#     with open(fName, 'r') as f:
-#         reader = csv.DictReader(f)
-#         tracklist = list()
-#         for row in reader:
-#             if "Duration" in row:
-#                 row["Duration"] = parseTimeStr(row["Duration"])
-#             for k, v in row.items():
-#                 row[k] = Util.convertStrValue(v, k not in strKeys)
-#             tracklist.append(row)
-#     return tracklist
+def read_simple_tracklist(fname):
+    """Reads a tracklist consisting of a row of metadata followed
+by rows of track data."""
+    with open(fname, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        metadata_row = next(reader)
+        if len(metadata_row) == 4:
+            artist, album, year, genre = metadata_row
+        else:
+            artist, album, year = metadata_row
+            genre = None
+        year = int(year)
+        track_info = list()
+        for row in reader:
+            title = row[0]
+            length, discnum = 0, None
+            if len(row) > 1:
+                length = parse_time_str(row[1])
+                if len(row) == 3:
+                    discnum = int(row[2])
+            track_info.append((title, length * 1000, discnum))
+    return convert_to_tracks(track_info, artist=artist, album=album, year=year, genre=genre)
+
+def write_simple_tracklist(fname, tracks):
+    with open(fname, 'w') as f:
+        writer = csv.writer(f, delimiter='\t')
+        if tracks[0].genre:
+            metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year, tracks[0].genre]
+        else:
+            metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year]
+        writer.writerow(metadata_row)
+
+        for track in tracks:
+            mins, secs = divmod(track.length / 1000, 60)
+            length_str = '%d:%02d' % (mins, secs)
+            if track.dn:
+                writer.writerow([track.title, length_str, track.dn])
+            else:
+                writer.writerow([track.title, length_str])
+
+# Reads a track list from a file
+def read_tracklist(fName):
+    if fName.lower().endswith('.txt'):
+        return read_simple_tracklist(fName)
+    with open(fName, 'r') as f:
+        reader = csv.DictReader(f)
+        tracks = list()
+        for row in reader:
+            for k, v in row.items():
+                row[k] = convert_str_value(v, k not in strKeys)
+            tracks.append(Metadata.from_dict(row))
+    return tracks
+
+# Writes a track list to a file
+def write_tracklist(fName, tracks):
+    if fName.lower().endswith('.txt'):
+        return write_simple_tracklist(fName, tracks)
+    with open(fName, 'w') as f:
+        writer = csv.DictWriter(f, tracks[0].all_keys)
+        writer.writeheader()
+        for track in tracks:
+            writer.writerow(dict([(k, to_str_value(v)) for k, v in track.to_dict().items()]))
+    return tracks

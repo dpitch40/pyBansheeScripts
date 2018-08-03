@@ -8,14 +8,14 @@ class MusicDb(abc.ABC, Metadata):
 
     sigil = '*'
 
-    all_keys = Metadata.all_keys + ('location',
-                                    'bitrate',
+    all_keys = Metadata.all_keys + ('bitrate',
                                     'rating',
                                     'play_count',
                                     'skip_count',
                                     'last_played',
                                     'last_skipped',
-                                    'date_added')
+                                    'date_added',
+                                    'location')
 
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
                     '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length).3fs\t%(bitrate)skbps\t'
