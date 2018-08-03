@@ -80,7 +80,7 @@ class QLDb(MusicDb):
         return qls.songs
 
     @classmethod
-    def from_location(cls, loc):
+    def from_file(cls, loc):
         try:
             return cls(qls.location_to_song(loc))
         except KeyError as e:
@@ -100,7 +100,7 @@ class QLDb(MusicDb):
 def main():
     import sys
     import datetime
-    track = QLDb.from_location(sys.argv[1])
+    track = QLDb.from_file(sys.argv[1])
 
     print(track)
 

@@ -157,7 +157,7 @@ def parseTracklistFromUrl(url):
 ###############################################################################
 
 def readSimpleTrackList(fname):
-    """Reads a tracklist consisting of a row of metadata followed 
+    """Reads a tracklist consisting of a row of metadata followed
 by rows of track data."""
     with open(fname, 'r') as f:
         reader = csv.reader(f, delimiter='\t', skipinitialspace=True)

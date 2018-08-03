@@ -57,3 +57,5 @@ MP3Qual = 2
 TsFmt = "%Y-%m-%d %H:%M:%S"
 # album_artist defaults to artist if not specified
 AlbumArtistDefault = True
+# Default MusicDb class to use
+DefaultDb = None

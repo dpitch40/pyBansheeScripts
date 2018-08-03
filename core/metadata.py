@@ -1,7 +1,8 @@
 import pprint
 from core.mw import MappingWrapper
+from core.fd import FormattingDictLike
 
-class Metadata(MappingWrapper):
+class Metadata(MappingWrapper, FormattingDictLike):
     sigil = '#'
 
     """Base class for all objects that provide access to song metadata."""
@@ -25,10 +26,22 @@ class Metadata(MappingWrapper):
                 )
 
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length).3fs']
+                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss']
 
     def __init__(self, d=None):
         MappingWrapper.__init__(self, d)
+
+    def update_changes(self, other, copy_none=True):
+        changes = dict()
+        for k, v in other.all_keys:
+            if k in self.all_keys:
+                if v is not None or copy_none:
+                    changes[k] = v
+        return changes
+
+    def update(self, other, copy_none=True):
+        for k, v in self.update_changes(other, copy_none).items():
+            setattr(self, k, v)
 
     def to_dict(self):
         return dict([(k, getattr(self, k)) for k in self.all_keys])
@@ -41,21 +54,8 @@ class Metadata(MappingWrapper):
                 setattr(inst, k, v)
         return inst
 
-    def _format_dict(self):
-        d = self.to_dict()
-        if d['length']:
-            d['length'] = d['length'] / 1000
-        return d
-
-    def __str__(self):
-        d = self._format_dict()
-        for k, v in d.items():
-            if v is None:
-                d[k] = ''
-        return (self.sigil * 3) + ' ' + '\n    '.join([l % d for l in self.format_lines])
-
-    def __repr__(self):
-        return pprint.pformat(self.to_dict())
+    def _format_length(self, value):
+        return '%.3f' % (value / 1000)
 
     # properties
 

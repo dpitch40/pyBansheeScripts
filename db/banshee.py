@@ -96,7 +96,7 @@ class BansheeDb(MusicDb):
         return cls._from_sql(select_stmt % {'where': " WHERE ct.TrackID = ?"}, id_)
 
     @classmethod
-    def from_location(cls, loc):
+    def from_file(cls, loc):
         return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
 
     # Properties/descriptors
@@ -139,7 +139,7 @@ class BansheeDb(MusicDb):
 def main():
     import sys
     import datetime
-    track = BansheeDb.from_location(sys.argv[1])
+    track = BansheeDb.from_file(sys.argv[1])
 
     print(track)
 

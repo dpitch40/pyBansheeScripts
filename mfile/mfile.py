@@ -1,7 +1,8 @@
-from core.metadata import Metadata
 import abc
 
-class MusicFile(abc.ABC, Metadata):
+from core.metadata import Metadata
+
+class MusicFile(Metadata):
 
     sigil = '%'
 
@@ -14,7 +15,7 @@ class MusicFile(abc.ABC, Metadata):
                       'bitrate')
 
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length).3fs\t%(bitrate)skbps',
+                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps',
                     '%(location)s']
 
     def __init__(self, fname, d):
