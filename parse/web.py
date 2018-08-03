@@ -7,19 +7,49 @@ from core.metadata import Metadata
 from .util import parse_time_str
 
 # regex for the domain name of a url
-urlRe = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.com")
+url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.com")
 
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
        'Accept-Language': 'en-US,en;q=0.8',
        'Connection': 'keep-alive'}
 
-domainParsers = dict()
+parsers = dict()
 def register_parser(site):
     def _inner(func):
-        domainParsers[site] = func
+        parsers[site] = func
         return func
     return _inner
+
+def convert_to_tracks(info_list, **kwargs):
+    disc_num = None
+    track_num = 1
+    tracks_per_disc = dict()
+    tracks = list()
+    for track_info in info_list:
+        if track_info[2] != disc_num:
+            if disc_num is not None:
+                tracks_per_disc[disc_num] = track_num - 1
+            track_num = 1
+        title, length, disc_num = track_info
+        length = parse_time_str(length)
+        if length is not None:
+            length *= 1000
+
+        d = {'title': title,
+             'length': length,
+             'tn': track_num,
+             'dn': disc_num}
+        d.update(kwargs)
+        tracks.append(Metadata(d))
+        track_num += 1
+
+    tracks_per_disc[disc_num] = track_num - 1
+    for track in tracks:
+        track.tc = tracks_per_disc[track.dn]
+        track.dc = disc_num
+
+    return tracks
 
 @register_parser("metal-archives")
 def parse_ma_tracklist(soup):
@@ -32,86 +62,75 @@ def parse_ma_tracklist(soup):
     year = int(date_str.rsplit(None, 1)[-1])
 
     song_table = soup.findAll("table", class_="table_lyrics")[0]
+    track_info = list()
     disc_num = None
-    for track_num, table_row in enumerate(song_table.findAll("tr")):
+    for table_row in song_table.findAll("tr"):
         if table_row.get("class", None) == ["discRow"]:
             disc_num = int(next(table_row.stripped_strings).split()[1])
+
         title = table_row.find("td", class_="wrapWords")
         if title is None:
             continue
         track_title = title.string.strip()
-        length = parse_time_str(title.find_next_sibling("td").string)
+        length = title.find_next_sibling("td").string
+        track_info.append((track_title, length, disc_num))
 
-        track = Metadata({'title': track_title,
-                          'artist': artist,
-                          'album': album,
-                          'year': year,
-                          'length': length * 1000,
-                          'tn': track_num + 1,
-                          'dn': disc_num})
-        tracks.append(track)
-    track_count = len(tracks)
-    for track in tracks:
-        track.tc = track_count
-        track.dc = disc_num
-
-    return tracks
+    return convert_to_tracks(track_info, artist=artist, album=album, year=year)
 
 @register_parser("allmusic")
-def parseAllMusictracklist(soup):
-    releaseDateDiv = soup.find("div", class_="release-date")
-    releaseDateStr = releaseDateDiv.find("span").string
-    year = int(releaseDateStr.rsplit(None, 1)[-1])
+def parse_allmusic_tracklist(soup):
+    release_date_div = soup.find("div", class_="release-date")
+    release_date_str = release_date_div.find("span").string
+    year = int(release_date_str.rsplit(None, 1)[-1])
 
-    artistH = soup.find("h2", class_="album-artist")
-    artist = artistH.stripped_strings.next()
-    albumH = artistH.find_next_sibling("h1")
-    album = albumH.stripped_strings.next()
+    artist_header = soup.find("h2", class_="album-artist")
+    artist = artist_header.stripped_strings.next()
+    album_header = artist_header.find_next_sibling("h1")
+    album = album_header.stripped_strings.next()
 
-    tracks = [(artist, album, year)]
+    track_info = list()
 
-    tracksSection = soup.find("section", class_="track-listing")
-    tBodies = list(tracksSection.findAll("tbody"))
-    hasMultipleDiscs = len(tBodies) > 1
-    for discNum, tBody in enumerate(tBodies):
-        for tableRow in tBody.findAll("tr"):
-            titleDiv = tableRow.find("div", class_="title")
-            title = titleDiv.stripped_strings.next()
+    tracks = soup.find("section", class_="track-listing")
+    t_bodies = list(tracks.findAll("tbody"))
+    has_multiple_disc = len(t_bodies) > 1
+    for disc_num, t_body in enumerate(t_bodies):
+        for table_row in t_body.findAll("tr"):
+            title = table_row.find("div", class_="title").stripped_strings.next()
 
-            timeDiv = tableRow.find("td", class_="time")
+            time_div = table_row.find("td", class_="time")
             try:
-                trackLen = parseTimeStr(timeDiv.stripped_strings.next())
+                track_len = time_div.stripped_strings.next()
             except StopIteration:
-                trackLen = 0
+                track_len = 0
 
-            if hasMultipleDiscs:
-                tracks.append((title, trackLen, discNum+1))
+            if has_multiple_disc:
+                track_info.append((title, track_len, disc_num+1))
             else:
-                tracks.append((title, trackLen))
+                track_info.append((title, track_len, None))
 
-    return tracks
+    return convert_to_tracks(track_info, artist=artist, album=album, year=year)
 
 @register_parser("bandcamp")
-def parseBandcampTracklist(soup):
+def parse_bandcamp_tracklist(soup):
     name_section = soup.find('div', id='name-section')
     album = next(name_section.find('h2', itemprop='name').stripped_strings)
     artist = next(name_section.find('span', itemprop='byArtist').stripped_strings)
     year = int(soup.find('meta', itemprop='datePublished')['content'][:4])
 
-    tracks = [(artist, album, year)]
-
     track_table = soup.find('table', id='track_table')
+    track_info = list()
+    disc_num = None
     for row in track_table.find_all('tr'):
         # TODO: Support multiple discs
         title = next(row.find('span', itemprop='name').stripped_strings)
-        time = parseTimeStr(next(row.find('span', class_='time').stripped_strings))
-        tracks.append((title, time))
+        time = next(row.find('span', class_='time').stripped_strings)
+        track_info.append((title, time, disc_num))
 
-    return tracks
+    return convert_to_tracks(track_info, artist=artist, album=album, year=year)
 
 def parse_tracklist_from_url(url):
-    domain = urlRe.match(url).group(1).lower()
-    if domain not in domainParsers:
+    domain = url_re.match(url).group(1).lower()
+    if domain not in parsers:
         raise KeyError("No parser defined for domain %r" % domain)
 
     result = None
@@ -119,6 +138,6 @@ def parse_tracklist_from_url(url):
 
     html = request.text
     soup = BeautifulSoup(html, "lxml")
-    result = domainParsers[domain](soup)
+    result = parsers[domain](soup)
 
     return result
