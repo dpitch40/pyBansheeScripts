@@ -65,13 +65,21 @@ class Track(FormattingDictLike):
         for name in (from_, to_):
             if getattr(self, name) is None:
                 raise AttributeError('Track has no %s' % name)
-        getattr(self, to_).update(getattr(self, from_))
+        updater_name = '_update_%s_to_%s' % (from_, to_)
+        if hasattr(self, updater_name):
+            getattr(self, updater_name)()
+        else:
+            getattr(self, to_).update(getattr(self, from_))
+
+    def _update_mfile_to_db(self):
+        self.db.update(self.mfile)
 
 def main():
     import sys
 
     track = Track.from_file(sys.argv[1])
-    print(track)
+    print(track.update_changes('mfile', 'db'))
+    track.update('mfile', 'db')
 
 if __name__ == '__main__':
     main()

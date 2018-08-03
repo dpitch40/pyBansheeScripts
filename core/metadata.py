@@ -33,15 +33,19 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     def update_changes(self, other, copy_none=True):
         changes = dict()
-        for k, v in other.all_keys:
+        for k in other.all_keys:
             if k in self.all_keys:
-                if v is not None or copy_none:
+                v = getattr(other, k)
+                if v != getattr(self, k) and (v is not None or copy_none):
                     changes[k] = v
         return changes
 
     def update(self, other, copy_none=True):
         for k, v in self.update_changes(other, copy_none).items():
-            setattr(self, k, v)
+            if k not in self.read_only_keys:
+                setattr(self, k, v)
+            else:
+                print('Skipping updating %s' % k)
 
     def to_dict(self):
         return dict([(k, getattr(self, k)) for k in self.all_keys])
