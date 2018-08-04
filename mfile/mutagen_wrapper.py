@@ -32,6 +32,11 @@ class MutagenFile(MusicFile):
     def set_item(self, key, value):
         self.wrapped_dict[key] = [value]
 
+    def rebase(self, new_fname):
+        self.fname = new_fname
+        self.audio = self.mutagen_class(new_fname)
+        self.set_dict(self.audio)
+
     # Properties/descriptors
 
     @property

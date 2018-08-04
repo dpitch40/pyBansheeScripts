@@ -43,19 +43,34 @@ class MusicDb(Metadata):
 
     @abc.abstractmethod
     def save(self):
+        """Saves thhis object back to the database."""
         raise NotImplementedError
 
     @classmethod
     @abc.abstractmethod
     def commit(self):
+        """Commits the object's database. Call this after saving all relevant
+           objects to write the changes back to the databas file."""
         raise NotImplementedError
 
     @classmethod
     @abc.abstractmethod
     def load_all(self):
+        """Returns a list of all instances of this object in the corresponding database."""
         raise NotImplementedError
 
     @classmethod
     @abc.abstractmethod
     def from_file(cls, loc):
+        """Initializes and returns a new object of this class from a file."""
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def rebase(self, new_fname):
+        """Rebases this MusicDb on a new file location."""
+        raise NotImplementedError
+
+    def move(self, new_fname):
+        """Moves this MusicFile to a new location."""
+        shutil.move(self.fname, new_fname)
+        self.rebase(new_fname)

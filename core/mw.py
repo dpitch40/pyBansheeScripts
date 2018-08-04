@@ -11,10 +11,12 @@ class MappingWrapper(object):
     read_only_keys = ()
 
     def __init__(self, d=None):
-        if d:
-            self.wrapped_dict = d
-        else:
-            self.wrapped_dict = dict()
+        if d is None:
+            d = dict()
+        self.set_dict(d)
+
+    def set_dict(self, d):
+        self.wrapped_dict = d
 
     def _map_key(self, key):
         return self.mapping.get(key, key)

@@ -1,4 +1,5 @@
 import abc
+import shutil
 
 from core.metadata import Metadata
 
@@ -33,6 +34,16 @@ class MusicFile(Metadata):
     @property
     def location(self):
         return self.fname
+
+    @abc.abstractmethod
+    def rebase(self, new_fname):
+        """Rebases this MusicFile on a new file location."""
+        raise NotImplementedError
+
+    def move(self, new_fname):
+        """Moves this MusicFile to a new location."""
+        shutil.move(self.fname, new_fname)
+        self.rebase(new_fname)
 
     @abc.abstractmethod
     def save(self):
