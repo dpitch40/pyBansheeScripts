@@ -86,9 +86,6 @@ class QLDb(MusicDb):
         except KeyError as e:
             raise KeyError('No song with location %r exists in the songs library' % loc) from e
 
-    def rebase(self, new_fname):
-
-
     date_added = date_descriptor('~#added')
     last_played = date_descriptor('~#lastplayed')
     last_skipped = date_descriptor('~#lastskipped')

@@ -23,7 +23,7 @@ class MusicDb(Metadata):
                     'Added %(date_added)s, last played %(last_played)s, last skipped %(last_skipped)s',
                     '%(location)s']
 
-    read_only_keys = ('bitrate', 'length') # Location not read-only
+    read_only_keys = ()
 
     def __init__(self, d):
         super(MusicDb, self).__init__(d)
@@ -64,13 +64,3 @@ class MusicDb(Metadata):
     def from_file(cls, loc):
         """Initializes and returns a new object of this class from a file."""
         raise NotImplementedError
-
-    @abc.abstractmethod
-    def rebase(self, new_fname):
-        """Rebases this MusicDb on a new file location."""
-        raise NotImplementedError
-
-    def move(self, new_fname):
-        """Moves this MusicFile to a new location."""
-        shutil.move(self.fname, new_fname)
-        self.rebase(new_fname)
