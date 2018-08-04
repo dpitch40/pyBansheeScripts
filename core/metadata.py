@@ -44,8 +44,6 @@ class Metadata(MappingWrapper, FormattingDictLike):
         for k, v in self.update_changes(other, copy_none).items():
             if k not in self.read_only_keys:
                 setattr(self, k, v)
-            else:
-                print('Skipping updating %s' % k)
 
     def to_dict(self):
         return dict([(k, getattr(self, k)) for k in self.all_keys])
@@ -60,6 +58,9 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     def _format_length(self, value):
         return '%.3f' % (value / 1000)
+
+    def __str__(self):
+        return '%s<%s, %s, %s>' % (self.__class__.__name__, self.title, self.artist, self.album)
 
     # properties
 
