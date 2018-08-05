@@ -28,6 +28,8 @@ class MusicDb(Metadata):
     def __init__(self, d):
         super(MusicDb, self).__init__(d)
 
+    # String formatting
+
     def _format_dict(self):
         d = super(MusicDb, self)._format_dict()
         for k in ('last_played',

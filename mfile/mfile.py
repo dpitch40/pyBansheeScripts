@@ -38,6 +38,11 @@ class MusicFile(Metadata):
 
     # Functionality
 
+    def refresh(self):
+        """Refreshes this MusicFile from the file, e.g. if it has been modified
+           by an external program."""
+        self.rebase(self.fname)
+
     def move(self, new_fname):
         """Moves this MusicFile to a new location."""
         shutil.move(self.fname, new_fname)
