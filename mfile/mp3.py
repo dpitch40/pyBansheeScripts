@@ -17,6 +17,8 @@ from mfile.mutagen_wrapper import MutagenFile
 
 class MP3File(MutagenFile):
 
+    ext = '.mp3'
+
     def mutagen_class(self, fname):
         return MP3(fname, ID3=EasyID3)
 
@@ -29,9 +31,7 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
-    print(repr(mp3))
-    mp3.rebase(sys.argv[2])
-    print(repr(mp3))
+    print(mp3.format())
     # mp3.save()
 
 if __name__ == '__main__':

@@ -1,5 +1,7 @@
 # from mutagen import MutagenError
 
+import os.path
+
 import config
 from core.mw import MappingWrapper
 from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
@@ -14,14 +16,13 @@ class MutagenFile(MusicFile):
                'title_sort': 'titlesort'}
 
     def __init__(self, fname):
+        if os.path.splitext(fname)[1].lower() != self.ext:
+            raise ValueError('Cannot open the file %s with %s' % (fname,
+                                    self.__class__.__name__))
         self.audio = self.mutagen_class(fname)
         MusicFile.__init__(self, fname, self.audio)
 
-    def mutagen_class(self, fname):
-        raise NotImplementedError
-
-    def save(self):
-        self.audio.save()
+    # MappingWrapper methods overridden
 
     def get_item(self, key):
         value = self.wrapped_dict.get(key, None)
@@ -31,6 +32,11 @@ class MutagenFile(MusicFile):
 
     def set_item(self, key, value):
         self.wrapped_dict[key] = [value]
+
+    # MusicFile methods overridden
+
+    def save(self):
+        self.audio.save()
 
     def rebase(self, new_fname):
         self.fname = new_fname
@@ -65,3 +71,8 @@ class MutagenFile(MusicFile):
     year = int_descriptor('date')
     tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
     dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
+
+    # To be overridden
+
+    def mutagen_class(self, fname):
+        raise NotImplementedError

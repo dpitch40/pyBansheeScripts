@@ -4,6 +4,8 @@ from mfile.mutagen_wrapper import MutagenFile
 
 class OggFile(MutagenFile):
 
+    ext = '.ogg'
+
     def mutagen_class(self, fname):
         return OggVorbis(fname)
 

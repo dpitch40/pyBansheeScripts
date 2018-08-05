@@ -30,16 +30,20 @@ class MusicDb(Metadata):
 
     def _format_dict(self):
         d = super(MusicDb, self)._format_dict()
-        if d['bitrate']:
-            d['bitrate'] = d['bitrate'] / 1000
-            if d['bitrate'] % 1 == 0:
-                d['bitrate'] = int(d['bitrate'])
         for k in ('last_played',
                   'last_skipped',
                   'date_added'):
             if d[k]:
                 d[k] = d[k].strftime('%Y-%m-%d %H:%M:%S')
         return d
+
+    def _format_bitrate(self, bitrate):
+        bitrate = bitrate / 1000
+        if bitrate % 1 == 0:
+            bitrate = int(bitrate)
+        return bitrate
+
+    # To be overridden
 
     @abc.abstractmethod
     def save(self):

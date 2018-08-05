@@ -1,11 +1,13 @@
 import abc
 import shutil
+import os.path
 
 from core.metadata import Metadata
 
 class MusicFile(Metadata):
 
     sigil = '%'
+    ext = ''
 
     """Base class for metadata derived from a music file."""
 
@@ -20,30 +22,39 @@ class MusicFile(Metadata):
                     '%(location)s']
 
     def __init__(self, fname, d):
+        if os.path.splitext(fname)[1].lower() != self.ext:
+            raise ValueError('Cannot open the file %s with %s' % (fname,
+                                    self.__class__.__name__))
         self.fname = fname
         super(MusicFile, self).__init__(d)
 
-    def _format_dict(self):
-        d = super(MusicFile, self)._format_dict()
-        if d['bitrate']:
-            d['bitrate'] = d['bitrate'] / 1000
-            if d['bitrate'] % 1 == 0:
-                d['bitrate'] = int(d['bitrate'])
-        return d
+    # Formatting
 
-    @property
-    def location(self):
-        return self.fname
+    def _format_bitrate(self, bitrate):
+        bitrate = bitrate / 1000
+        if bitrate % 1 == 0:
+            bitrate = int(bitrate)
+        return bitrate
 
-    @abc.abstractmethod
-    def rebase(self, new_fname):
-        """Rebases this MusicFile on a new file location."""
-        raise NotImplementedError
+    # Functionality
 
     def move(self, new_fname):
         """Moves this MusicFile to a new location."""
         shutil.move(self.fname, new_fname)
         self.rebase(new_fname)
+
+    # Descriptor
+
+    @property
+    def location(self):
+        return self.fname
+
+    # To be overridden
+
+    @abc.abstractmethod
+    def rebase(self, new_fname):
+        """Rebases this MusicFile on a new file location."""
+        raise NotImplementedError
 
     @abc.abstractmethod
     def save(self):

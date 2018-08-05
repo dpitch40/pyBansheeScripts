@@ -68,6 +68,8 @@ class QLDb(MusicDb):
         super(MusicDb, self).__init__(song)
         self.song = song
 
+    # Overridden from MusicDb
+
     def save(self):
         pass
 
@@ -86,6 +88,8 @@ class QLDb(MusicDb):
         except KeyError as e:
             raise KeyError('No song with location %r exists in the songs library' % loc) from e
 
+    # Properties/descriptors
+
     date_added = date_descriptor('~#added')
     last_played = date_descriptor('~#lastplayed')
     last_skipped = date_descriptor('~#lastskipped')
@@ -102,7 +106,7 @@ def main():
     import datetime
     track = QLDb.from_file(sys.argv[1])
 
-    print(track)
+    print(track.format())
 
     # del track.last_played
     # track.tnc = (1, 8)

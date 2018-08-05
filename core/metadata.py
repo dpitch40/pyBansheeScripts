@@ -56,13 +56,15 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 setattr(inst, k, v)
         return inst
 
+    # Formatting
+
     def _format_length(self, value):
         return '%.3f' % (value / 1000)
 
     def __str__(self):
         return '%s<%s, %s, %s>' % (self.__class__.__name__, self.title, self.artist, self.album)
 
-    # properties
+    # Properties/descriptors
 
     @property
     def tnc(self):

@@ -1,6 +1,5 @@
 from db.db import MusicDb
-from .db_glue import db
-
+from db import db_glue
 from core.util import date_descriptor, make_descriptor_func
 
 db = db_glue.db
@@ -53,6 +52,8 @@ class BansheeDb(MusicDb):
         self.sql_row = self.row.copy()
         self.id_ = self.row['TrackID']
 
+    # Overridden from MusicDb
+
     def save(self):
         changes = list()
         for name, trans_name in field_mapping.items():
@@ -74,7 +75,11 @@ class BansheeDb(MusicDb):
     def load_all(cls):
         return [cls(row) for row in db.sql(select_stmt % {'where': ''})]
 
-    # Constructors for getting a track from the db
+    @classmethod
+    def from_file(cls, loc):
+        return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
+
+    # other constructors for getting a track from the db
 
     @classmethod
     def _from_rows(cls, rows):
@@ -94,10 +99,6 @@ class BansheeDb(MusicDb):
     @classmethod
     def from_trackid(cls, id_):
         return cls._from_sql(select_stmt % {'where': " WHERE ct.TrackID = ?"}, id_)
-
-    @classmethod
-    def from_file(cls, loc):
-        return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
 
     # Properties/descriptors
 
@@ -141,7 +142,7 @@ def main():
     import datetime
     track = BansheeDb.from_file(sys.argv[1])
 
-    print(track)
+    print(track.format())
 
     # del track.title_sort
     # del track.last_skipped
