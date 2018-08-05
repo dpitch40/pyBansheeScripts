@@ -16,19 +16,19 @@ class MappingWrapper(object):
         self.set_dict(d)
 
     def set_dict(self, d):
-        self.wrapped_dict = d
+        self.wrapped = d
 
     def _map_key(self, key):
         return self.mapping.get(key, key)
 
     def get_item(self, key):
-        return self.wrapped_dict.get(key, None)
+        return self.wrapped.get(key, None)
 
     def set_item(self, key, value):
-        self.wrapped_dict[key] = value
+        self.wrapped[key] = value
 
     def del_item(self, key):
-        del self.wrapped_dict[key]
+        del self.wrapped[key]
 
     def __getattr__(self, key):
         if key in self.all_keys:

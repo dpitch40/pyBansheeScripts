@@ -2,17 +2,17 @@ import abc
 import shutil
 import os.path
 
-from core.metadata import Metadata
+from core.file_based import FileBased
 
-class MusicFile(Metadata):
+class MusicFile(FileBased):
 
     sigil = '%'
     ext = ''
 
     """Base class for metadata derived from a music file."""
 
-    all_keys = Metadata.all_keys + ('bitrate', # Integer number of bits/second
-                                    'location') # File location
+    all_keys = FileBased.all_keys + ('bitrate', # Integer number of bits/second
+                                     'location') # File location
     read_only_keys = ('length',
                       'location',
                       'bitrate')
@@ -59,9 +59,4 @@ class MusicFile(Metadata):
     @abc.abstractmethod
     def rebase(self, new_fname):
         """Rebases this MusicFile on a new file location."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def save(self):
-        """Saves the metadata in described by this instance back to the music file."""
         raise NotImplementedError

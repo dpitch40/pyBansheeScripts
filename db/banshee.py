@@ -48,24 +48,29 @@ class BansheeDb(MusicDb):
 
     def __init__(self, d):
         super(BansheeDb, self).__init__(d)
-        self.row = d
-        self.sql_row = self.row.copy()
-        self.id_ = self.row['TrackID']
+        self.sql_row = self.wrapped.copy()
+        self.id_ = self.wrapped['TrackID']
 
     # Overridden from MusicDb
 
-    def save(self):
+    def _save(self, changes):
         changes = list()
         for name, trans_name in field_mapping.items():
-            if name in self.row:
-                if self.row[name] != self.sql_row.get(name, None):
+            if name in self.wrapped:
+                if self.wrapped[name] != self.sql_row.get(name, None):
                     changes.append('%s = :%s' % (trans_name, name))
             elif name in self.sql_row:
                 changes.append('%s = NULL' % trans_name)
 
         if changes:
-            db.sql(update_stmt % ', '.join(changes), **self.row)
-            self.sql_row = self.row.copy()
+            change_strs = list()
+            for k, v in sorted(changes.items()):
+                name = field_mapping.get(k, k)
+                if v is None:
+                    change_strs.append('%s = NULL' % name)
+                else:
+                    change_strs.append('%s = :%s' % (name, k))
+            db.sql(update_stmt % ', '.join(change_strs), **self.to_dict())
 
     @classmethod
     def commit(cls):

@@ -66,11 +66,10 @@ class QLDb(MusicDb):
 
     def __init__(self, song):
         super(MusicDb, self).__init__(song)
-        self.song = song
 
     # Overridden from MusicDb
 
-    def save(self):
+    def _save(self, changes):
         pass
 
     @classmethod

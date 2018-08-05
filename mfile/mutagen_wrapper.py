@@ -19,39 +19,39 @@ class MutagenFile(MusicFile):
         if os.path.splitext(fname)[1].lower() != self.ext:
             raise ValueError('Cannot open the file %s with %s' % (fname,
                                     self.__class__.__name__))
-        self.audio = self.mutagen_class(fname)
-        MusicFile.__init__(self, fname, self.audio)
+        audio = self.mutagen_class(fname)
+        MusicFile.__init__(self, fname, audio)
 
     # MappingWrapper methods overridden
 
     def get_item(self, key):
-        value = self.wrapped_dict.get(key, None)
+        value = super(MutagenFile, self).get_item(key)
         if isinstance(value, list) and value:
             value = value[0]
         return value
 
     def set_item(self, key, value):
-        self.wrapped_dict[key] = [value]
+        super(MutagenFile, self).set_item(key, [value])
 
     # MusicFile methods overridden
 
-    def save(self):
-        self.audio.save()
+    def _save(self):
+        self.wrapped.save()
 
     def rebase(self, new_fname):
         self.fname = new_fname
-        self.audio = self.mutagen_class(new_fname)
-        self.set_dict(self.audio)
+        self.wrapped = self.mutagen_class(new_fname)
+        self.set_dict(self.wrapped)
 
     # Properties/descriptors
 
     @property
     def bitrate(self):
-        return self.audio.info.bitrate
+        return self.wrapped.info.bitrate
 
     @property
     def length(self):
-        return self.audio.info.length * 1000
+        return self.wrapped.info.length * 1000
 
     @property
     def album_artist(self):
@@ -62,11 +62,11 @@ class MutagenFile(MusicFile):
 
     @album_artist.setter
     def album_artist(self, value):
-        self.audio['albumartistsort'] = value
+        self.wrapped['albumartistsort'] = value
 
     @album_artist.deleter
     def album_artist(self):
-        del self.audio['albumartistsort']
+        del self.wrapped['albumartistsort']
 
     year = int_descriptor('date')
     tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
