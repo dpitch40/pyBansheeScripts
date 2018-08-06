@@ -1,3 +1,5 @@
+import subprocess
+
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 
@@ -22,6 +24,49 @@ class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
 
     def mutagen_class(self, fname):
         return MP3(fname, ID3=EasyID3)
+
+    def create_decoder(self):
+        decoder = subprocess.Popen(['lame', '--decode', '-t',
+                                    '--silent',
+                                    self.fname, '-'],
+                        stdout=subprocess.PIPE)
+        return decoder
+
+    @classmethod
+    def create_encoder(self, fname, metadata, bitrate):
+        tags = list()
+        if metadata.title:
+            tags.extend(['--tt', metadata.title])
+        if metadata.artist:
+            tags.extend(['--ta', metadata.artist])
+        if metadata.album:
+            tags.extend(['--tl', metadata.album])
+        if metadata.year:
+            tags.extend(['--ty', str(metadata.year)])
+        if metadata.tn:
+            if metadata.tc:
+                tags.extend(['--tn', '%d/%d' % metadata.tnc])
+            else:
+                tags.extend(['--tn', str(metadata.tn)])
+        if metadata.dn:
+            if metadata.dc:
+                tags.extend(['--tv', 'TPOS=%d/%d' % metadata.dnc])
+            else:
+                tags.extend(['--tv', 'TPOS=%d' % metadata.dn])
+        if metadata.genre:
+            tags.extend(['--tg', metadata.genre])
+
+        encoder = subprocess.Popen(["lame", '-r',
+                                    '-s', '%s' % (config.RawSampleRate / 1000),
+                                    '--bitwidth', str(config.RawBitsPerSample),
+                                    '--%s' % config.RawSigned,
+                                    '--%s-endian' % config.RawEndianness,
+                                    '--silent',
+                                    '--noreplaygain',
+                                    '-q', '%d' % config.MP3Qual,
+                                    '-b', '%d' % bitrate] + tags + ['-', fname], stdin=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL)
+        return encoder
 
     @property
     def album_artist(self):

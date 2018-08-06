@@ -51,7 +51,7 @@ class FlacFile(MutagenFile):
                                  (metadata.album_artist, 'ALBUMARTIST')]:
             if value is not None:
                 tags.append('--tag=%s=%s' % (fieldname, value))
-        encoder = subprocess.Popen(["flac", '--force-raw-format',
+        encoder = subprocess.Popen(["flac", '--force-raw-format', '--silent',
                                     '-' + str(config.FlacCompLevel),
                                     '-o', fname,
                                     '--endian=%s' % config.RawEndianness,
