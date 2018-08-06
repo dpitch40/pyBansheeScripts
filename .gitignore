@@ -1,5 +1,6 @@
 *.pyc
 *.mp3
+*.flac
 *.ogg
 *.txt
 *.tsv

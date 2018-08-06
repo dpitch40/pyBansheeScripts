@@ -2,6 +2,7 @@ from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 
 from mfile.mutagen_wrapper import MutagenFile
+from core.util import int_descriptor, make_descriptor_func, make_numcount_descriptors
 
 """EasyID3 tags:
    ['albumartistsort', 'musicbrainz_albumstatus', 'lyricist', 'musicbrainz_workid', 'releasecountry',
@@ -22,6 +23,25 @@ class MP3File(MutagenFile):
     def mutagen_class(self, fname):
         return MP3(fname, ID3=EasyID3)
 
+    @property
+    def album_artist(self):
+        aa = self.__getattr__('album_artist')
+        if aa is None and config.AlbumArtistDefault:
+            aa = self.__getattr__('artist')
+        return aa
+
+    @album_artist.setter
+    def album_artist(self, value):
+        self.wrapped['albumartistsort'] = value
+
+    @album_artist.deleter
+    def album_artist(self):
+        del self.wrapped['albumartistsort']
+
+    year = int_descriptor('date')
+    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
+    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
+
 def main():
     import sys
     mp3 = MP3File(sys.argv[1])
@@ -32,6 +52,7 @@ def main():
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
     print(mp3.format())
+    print(repr(mp3))
     # mp3.save()
 
 if __name__ == '__main__':

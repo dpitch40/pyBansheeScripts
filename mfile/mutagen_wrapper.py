@@ -4,7 +4,6 @@ import os.path
 
 import config
 from core.mw import MappingWrapper
-from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
 from mfile.mfile import MusicFile
 
 class MutagenFile(MusicFile):
@@ -52,25 +51,6 @@ class MutagenFile(MusicFile):
     @property
     def length(self):
         return self.wrapped.info.length * 1000
-
-    @property
-    def album_artist(self):
-        aa = self.__getattr__('album_artist')
-        if aa is None and config.AlbumArtistDefault:
-            aa = self.__getattr__('artist')
-        return aa
-
-    @album_artist.setter
-    def album_artist(self, value):
-        self.wrapped['albumartistsort'] = value
-
-    @album_artist.deleter
-    def album_artist(self):
-        del self.wrapped['albumartistsort']
-
-    year = int_descriptor('date')
-    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
-    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
 
     # To be overridden
 

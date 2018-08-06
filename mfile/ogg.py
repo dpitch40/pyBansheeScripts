@@ -1,8 +1,8 @@
 from mutagen.oggvorbis import OggVorbis
 
-from mfile.mutagen_wrapper import MutagenFile
+from mfile.mp3 import MP3File
 
-class OggFile(MutagenFile):
+class OggFile(MP3File): # Inherit from MP3 file, just to override a few things
 
     ext = '.ogg'
 
@@ -20,7 +20,8 @@ def main():
     # ogg.genre = 'Pop/Electronic'
     # ogg.year = 2018
     # ogg.title = 'Heaven/Hell'
-    print(ogg)
+    print(ogg.format())
+    print(repr(ogg))
     # ogg.save()
 
 if __name__ == '__main__':
