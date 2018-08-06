@@ -8,7 +8,7 @@ from mfile.mfile import MusicFile
 
 class MutagenFile(MusicFile):
 
-    mapping = {'album_artist': 'albumartistsort',
+    mapping = {'album_artist': 'albumartist',
                'album_artist_sort': 'albumartistsort',
                'album_sort': 'albumsort',
                'artist_sort': 'artistsort',

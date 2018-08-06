@@ -43,8 +43,12 @@ IgnoreThe = True
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
 GroupSingletons = True
-# Default unicode encoding
-UnicodeEncoding = "utf-8"
+# Timestamp format for display
+TsFmt = "%Y-%m-%d %H:%M:%S"
+# album_artist defaults to artist if not specified
+AlbumArtistDefault = True
+# Default MusicDb class to use
+DefaultDb = None
 # Default bit rate to encode arbitrary tracks to
 DefaultBitrate = 128
 # Default bit rate to encode CDs to
@@ -53,9 +57,11 @@ DefaultCDBitrate = 256
 DefaultEncodeExt = ".ogg"
 # Default MP3 quality (0 <= qual <= 9, lower is better)
 MP3Qual = 2
-# Timestamp format for display
-TsFmt = "%Y-%m-%d %H:%M:%S"
-# album_artist defaults to artist if not specified
-AlbumArtistDefault = True
-# Default MusicDb class to use
-DefaultDb = None
+# Default FLAC encoding compression level (0 <= level <= 8; lower is faster, higher is more compressed)
+FlacCompLevel = 5
+# Raw file options for encoding/decoding
+RawSigned = 'signed'
+RawBitsPerSample = 16
+RawEndianness = 'big'
+RawChannels = 2
+RawSampleRate = 44100

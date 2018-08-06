@@ -60,3 +60,14 @@ class MusicFile(FileBased):
     def rebase(self, new_fname):
         """Rebases this MusicFile on a new file location."""
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def create_decoder(self):
+        """Returns a subprocess for decoding this file, outputting to stdout."""
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def create_encoder(self, fname, metadata, bitrate):
+        """Returns a subprocess for encoding data from stdin to the specified filename."""
+        raise NotImplementedError

@@ -1,8 +1,8 @@
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 
-from mfile.mutagen_wrapper import MutagenFile
-from core.util import int_descriptor, make_descriptor_func, make_numcount_descriptors
+import config
+from mfile.ogg import OggFile
 
 """EasyID3 tags:
    ['albumartistsort', 'musicbrainz_albumstatus', 'lyricist', 'musicbrainz_workid', 'releasecountry',
@@ -16,7 +16,7 @@ from core.util import int_descriptor, make_descriptor_func, make_numcount_descri
     'musicbrainz_trackid', 'arranger', 'albumsort', 'replaygain_*_peak', 'organization',
     'musicbrainz_releasetrackid']"""
 
-class MP3File(MutagenFile):
+class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
 
     ext = '.mp3'
 
@@ -25,22 +25,18 @@ class MP3File(MutagenFile):
 
     @property
     def album_artist(self):
-        aa = self.__getattr__('album_artist')
+        aa = self.get_item('albumartistsort')
         if aa is None and config.AlbumArtistDefault:
-            aa = self.__getattr__('artist')
+            aa = self.get_item('artist')
         return aa
 
     @album_artist.setter
     def album_artist(self, value):
-        self.wrapped['albumartistsort'] = value
+        self.set_item('albumartistsort', value)
 
     @album_artist.deleter
     def album_artist(self):
-        del self.wrapped['albumartistsort']
-
-    year = int_descriptor('date')
-    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
-    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
+        self.del_item('albumartistsort')
 
 def main():
     import sys
@@ -51,6 +47,7 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
+    print(mp3.wrapped)
     print(mp3.format())
     print(repr(mp3))
     # mp3.save()
