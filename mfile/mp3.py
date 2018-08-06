@@ -26,11 +26,12 @@ class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
         return MP3(fname, ID3=EasyID3)
 
     def create_decoder(self):
-        decoder = subprocess.Popen(['lame', '--decode', '-t',
-                                    '--silent',
-                                    self.fname, '-'],
-                        stdout=subprocess.PIPE)
-        return decoder
+        # decoder = subprocess.Popen(['lame', '--decode', '-t', '--mp3input',
+        #                             '--silent',
+        #                             self.fname, '-'],
+        #                 stdout=subprocess.PIPE)
+        # return decoder
+        raise NotImplementedError
 
     @classmethod
     def create_encoder(self, fname, metadata, bitrate):
