@@ -6,21 +6,33 @@ from mfile import open_music_file
 from core.util import sort_key, generate_disc_lens, get_fnames
 from parse import get_track_list
 
-def extract_keys(metadata, index, disc_lens=None):
-    keys = ['Track#%d' % index]
+def extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
+    keys = list()
     album, artist, title, tn, dn = metadata.album, metadata.artist, metadata.title, \
                                     metadata.tn, metadata.dn
+    album = album.lower() if album else ''
+    artist = artist.lower() if artist else ''
+    title = title.lower() if title else ''
 
     if getattr(metadata, 'location', None):
         keys.append(metadata.location)
 
-    if tn not in (0, None):
-        if dn and disc_lens is not None:
-            keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
-        keys.append((artist, album, tn, dn))
+    if title or get_all_keys:
 
-    if title:
+        if tn not in (0, None):
+            if dn and disc_lens is not None:
+                keys.append((title, artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+            keys.append((title, artist, album, tn, dn))
+
         keys.append((title, artist, album))
+
+    if not title or get_all_keys:
+        keys.append('Track#%d' % index)
+
+        if tn not in (0, None):
+            if dn and disc_lens is not None:
+                keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+            keys.append((artist, album, tn, dn))
 
     return keys
 
@@ -58,10 +70,11 @@ def match_metadata_to_files(metadatas, fnames):
 
     metadata_disc_lens = generate_disc_lens(metadatas)
     for i, metadata in enumerate(sorted(metadatas, key=sort_key)):
-        keys = extract_keys(metadata, i, metadata_disc_lens)
+        keys = extract_keys(metadata, i, metadata_disc_lens, True)
         for key in keys:
             if key in track_mapping:
                 matched.append((metadata, track_mapping[key]))
+                # print('--- MATCHED on %s' % str(key))
                 break
         else:
             unmatched_metadatas.append(metadata)
@@ -83,7 +96,9 @@ def main():
     matched, unmatched_metadatas, unmatched_tracks = match_metadata_to_files(metadatas, fnames)
 
     for metadata, track in matched:
+        print(metadata.format())
         print(track.format())
+        print()
 
     print('%d/%d matched' % (len(matched), len(fnames)))
 
