@@ -1,4 +1,7 @@
 from datetime import datetime
+from collections import defaultdict
+import os
+import os.path
 
 def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 
@@ -87,3 +90,25 @@ def make_numcount_descriptors(numname, countname, fieldname, unpack_list=False):
     numcount_descriptor = property(get_numcount, set_numcount, del_numcount)
 
     return num_descriptor, count_descriptor, numcount_descriptor
+
+def sort_key(track):
+    return (track.album_artist if track.album_artist else track.artist, track.album,
+            track.dn, track.tn, getattr(track, 'location', None))
+
+def generate_disc_lens(metadatas):
+    # Make mapping from disc number to number of tracks on the disc
+    disc_lens = defaultdict(int)
+    for metadata in metadatas:
+        dn = metadata.dn
+        if dn:
+            disc_lens[dn] += 1
+        else:
+            return None # All of the tracks must have metadata
+    return disc_lens
+
+def get_fnames(dir):
+    allowed_exts = {'.mp3', '.ogg', '.flac'}
+
+    fnames = os.listdir(dir)
+    return sorted([os.path.join(dir, fname) for fname in fnames if
+                        os.path.splitext(fname)[1].lower() in allowed_exts])

@@ -2,18 +2,9 @@ import csv
 import argparse
 import os.path
 
-from parse.file import read_tracklist, write_tracklist
-from parse.web import parse_tracklist_from_url
+from parse import get_track_list
+from parse.file import write_tracklist
 from parse.util import convert_str_value
-
-# Get a track list from a URL or file
-def get_track_list(loc):
-    if os.path.exists(loc):
-        tl = read_tracklist(loc)
-    else:
-        tl = parse_tracklist_from_url(loc)
-
-    return tl
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("Get a track list from an external source.")
