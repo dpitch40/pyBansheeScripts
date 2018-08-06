@@ -3,6 +3,7 @@ import argparse
 import glob
 
 from mfile import open_music_file
+from db import open_db
 from core.util import sort_key, generate_disc_lens, get_fnames
 from parse import get_track_list
 
@@ -59,8 +60,11 @@ def create_track_mapping(tracks):
 
     return track_mapping
 
-def match_metadata_to_files(metadatas, fnames):
-    tracks = [open_music_file(fname) for fname in fnames]
+def match_metadata_to_files(metadatas, fnames, use_db=False):
+    if use_db:
+        tracks = [open_db(fname) for fname in fnames]
+    else:
+        tracks = [open_music_file(fname) for fname in fnames]
     tracks.sort(key=sort_key)
 
     track_mapping = create_track_mapping(tracks)
@@ -87,13 +91,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('metadata_source')
     parser.add_argument('music_dir')
+    parser.add_argument('--use-db', action='store_true')
 
     args = parser.parse_args()
 
     metadatas = get_track_list(args.metadata_source)
     fnames = get_fnames(args.music_dir)
 
-    matched, unmatched_metadatas, unmatched_tracks = match_metadata_to_files(metadatas, fnames)
+    matched, unmatched_metadatas, unmatched_tracks = match_metadata_to_files(metadatas, fnames, args.use_db)
 
     for metadata, track in matched:
         print(metadata.format())
