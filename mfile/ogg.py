@@ -56,21 +56,6 @@ class OggFile(MutagenFile):
                                     tags + ['-'], stdin=subprocess.PIPE)
         return encoder
 
-    @property
-    def album_artist(self):
-        aa = self.get_item('albumartist')
-        if aa is None and config.AlbumArtistDefault:
-            aa = self.get_item('artist')
-        return aa
-
-    @album_artist.setter
-    def album_artist(self, value):
-        self.set_item('albumartist', value)
-
-    @album_artist.deleter
-    def album_artist(self):
-        self.del_item('albumartist')
-
     year = int_descriptor('date')
     tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')
     dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber')
@@ -89,6 +74,7 @@ def main():
     print(ogg.wrapped)
     print(ogg.format())
     print(repr(ogg))
+    print(ogg.calculate_fname())
     # ogg.save()
 
 if __name__ == '__main__':

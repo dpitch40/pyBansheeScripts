@@ -69,20 +69,20 @@ class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
                                     stderr=subprocess.DEVNULL)
         return encoder
 
-    @property
-    def album_artist(self):
-        aa = self.get_item('albumartistsort')
-        if aa is None and config.AlbumArtistDefault:
-            aa = self.get_item('artist')
-        return aa
+    # @property
+    # def album_artist(self):
+    #     aa = self.get_item('albumartistsort')
+    #     if aa is None and config.AlbumArtistDefault:
+    #         aa = self.get_item('artist')
+    #     return aa
 
-    @album_artist.setter
-    def album_artist(self, value):
-        self.set_item('albumartistsort', value)
+    # @album_artist.setter
+    # def album_artist(self, value):
+    #     self.set_item('albumartistsort', value)
 
-    @album_artist.deleter
-    def album_artist(self):
-        self.del_item('albumartistsort')
+    # @album_artist.deleter
+    # def album_artist(self):
+    #     self.del_item('albumartistsort')
 
 def main():
     import sys
@@ -93,7 +93,7 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
-    print(mp3.wrapped)
+    print(mp3.wrapped, type(mp3.wrapped))
     print(mp3.format())
     print(repr(mp3))
     # mp3.save()

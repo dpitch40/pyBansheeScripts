@@ -3,6 +3,9 @@ from collections import defaultdict
 import os
 import os.path
 
+forbidden_fname_chars = ':;\\!?*"<>|'
+xmlEscapedChars = "'"
+
 def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 
     def desc_func(name):
@@ -107,8 +110,32 @@ def generate_disc_lens(metadatas):
     return disc_lens
 
 def get_fnames(dir):
+    """Gets a list of music file names in a directory."""
     allowed_exts = {'.mp3', '.ogg', '.flac'}
 
     fnames = os.listdir(dir)
     return sorted([os.path.join(dir, fname) for fname in fnames if
                         os.path.splitext(fname)[1].lower() in allowed_exts])
+
+def filter_fname(f):
+    """ "Sanitizes" a filename: replaces forbidden characters and ending periods in directory names"""
+
+    for c in forbidden_fname_chars: # Replace characters in filename
+        f = f.replace(c, '_')
+    dir_name, fname = os.path.split(f)
+
+    if dir_name != '' and dir_name[-1] == '.': # Period at end of directory name?
+        dir_name = dir_name[:-1] + '_'
+    if fname.startswith('.'): # initial period in filename
+        fname = '_' + fname[1:]
+
+    return os.path.join(dir_name, fname)
+
+def filter_path_elements(elements):
+    """Wrapper function for filter_fname that also handles the artist/album/song title
+       containing forward slashes
+       basedir is the top-level directory (assumed not to contain forbidden characters)
+       elements is the list of path elementst hat may contain slashes; artist, album, title, etc."""
+    # Remove forward slashes in the path elements
+    elements = [element.replace('/', '_') for element in elements]
+    return filter_fname(os.path.join(*elements))

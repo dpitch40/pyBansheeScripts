@@ -1,6 +1,11 @@
 import pprint
+import os.path
+import string
+
+import config
 from core.mw import MappingWrapper
 from core.fd import FormattingDictLike
+from core.util import filter_path_elements
 
 class Metadata(MappingWrapper, FormattingDictLike):
     sigil = '#'
@@ -56,6 +61,71 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 setattr(inst, k, v)
         return inst
 
+    def calculate_fname(self, base_dir=config.MusicDir, nested=True, ext=None, singleton=False,
+                        group_artists=None):
+        if ext is None:
+            if getattr(self, 'location', None) is not None:
+                ext = os.path.splitext(self.location)[1]
+            else:
+                ext = config.DefaultEncodeExt
+        group_artists = group_artists or config.GroupArtists
+
+        title = self.title or 'Unknown Song'
+        artist = self.album_artist or self.artist or 'Unknown Artist'
+        album = self.album or 'Unknown Album'
+
+        tn = ''
+        if config.NumberTracks:
+            tn = self.tn
+            if tn:
+                dn = self.dn
+                if dn:
+                    tn = "%d-%02d " % (dn, tn)
+                else:
+                    tn = "%02d " % tn
+
+        singleton = singleton and config.GroupSingletons
+        if config.GroupArtists and not singleton:
+            sort_artist = artist
+            for word in config.IgnoreWords:
+                if sort_artist.startswith(word + ' '):
+                    sort_artist = sort_artist[len(word) + 1:]
+            first_char = sort_artist[0]
+            if first_char in string.ascii_letters:
+                first_char = first_char.upper()
+            else:
+                first_char = '0'
+            base_dir = os.path.join(base_dir, first_char)
+
+        if singleton:
+            path_elements = ["Singletons"]
+        elif not nested:
+            path_elements = []
+        else:
+            path_elements = [artist, album]
+
+        result = self._condense_dest(path_elements, title, tn, ext, base_dir)
+
+        return result
+
+    def _condense_dest(self, path_elements, fBase, tn, ext, base_dir):
+        new_name = self._get_dest_real(path_elements, fBase, tn, ext, base_dir)
+
+        # Make sure the name isn't too long
+        max_el_len = 64
+        while len(new_name) > 255:
+             new_name = self._get_dest_real([e[:max_el_len].rstrip() for e in path_elements],
+                                      fBase[:max_el_len].rstrip(), tn, ext, base_dir)
+             max_el_len -= 8
+
+        return new_name
+
+    def _get_dest_real(self, path_elements, title, tn, ext, base_dir):
+
+        new_base = "%s%s%s" % (tn, title, ext)
+        return os.path.join(base_dir, filter_path_elements(path_elements + [new_base]))
+
+
     # Formatting
 
     def _format_length(self, value):
@@ -65,6 +135,21 @@ class Metadata(MappingWrapper, FormattingDictLike):
         return '%s<%s, %s, %s>' % (self.__class__.__name__, self.title, self.artist, self.album)
 
     # Properties/descriptors
+
+    @property
+    def album_artist(self):
+        aa = self.get_item(self._map_key('album_artist'))
+        if aa is None and config.AlbumArtistDefault:
+            aa = self.artist
+        return aa
+
+    @album_artist.setter
+    def album_artist(self, value):
+        self.set_item('albumartist', value)
+
+    @album_artist.deleter
+    def album_artist(self):
+        self.del_item('albumartist')
 
     @property
     def tnc(self):

@@ -36,10 +36,9 @@ DeviceOrder = ["ROOT", "DEV2"]
 NumberTracks = True
 # Group artist folders into parent folders by first letter of their name, e.g. "/Agalloch/" ->
 # "/A/Agalloch/"
-GroupArtists = True
-# Ignore "The" at the beginning of artist names when grouping artists
-# TODO: Change this to a list of ignored words
-IgnoreThe = True
+GroupArtists = False
+# List of words to ignore at the beginning of artist names when grouping artists
+IgnoreWords = ['The']
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
 GroupSingletons = True
