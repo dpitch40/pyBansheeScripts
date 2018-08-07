@@ -2,6 +2,7 @@ from datetime import datetime
 from collections import defaultdict
 import os
 import os.path
+import glob
 
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
@@ -109,12 +110,17 @@ def generate_disc_lens(metadatas):
             return None # All of the tracks must have metadata
     return disc_lens
 
-def get_fnames(dir):
+def get_fnames(dir_):
     """Gets a list of music file names in a directory."""
+    # Try using glob
+    g = glob.glob(dir_)
+    if g != [dir_]:
+        return sorted(g)
+
     allowed_exts = {'.mp3', '.ogg', '.flac'}
 
-    fnames = os.listdir(dir)
-    return sorted([os.path.join(dir, fname) for fname in fnames if
+    fnames = os.listdir(dir_)
+    return sorted([os.path.join(dir_, fname) for fname in fnames if
                         os.path.splitext(fname)[1].lower() in allowed_exts])
 
 def filter_fname(f):

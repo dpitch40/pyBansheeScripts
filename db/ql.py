@@ -12,6 +12,7 @@ class QLSongs(object):
     def __init__(self):
         self._songs = None
         self._locations_to_songs = None
+        self._metadata_to_songs = None
 
     def _load_songs(self):
         with open(songs_loc, 'rb') as fobj:
@@ -19,23 +20,46 @@ class QLSongs(object):
         songs = load_audio_files(data)
         songs.sort(key=lambda x: (x.get('albumartist', ''), x.get('artist', ''), x.get('album', ''),
                                   x.get('discnumber', ''), x.get('tracknumber', '')))
-        self._load_locations_to_songs(songs)
+        self._load_indices(songs)
 
         return songs
 
-    def _load_locations_to_songs(self, songs):
+    def _load_indices(self, songs):
         # Make sure to keep this updated if locations change
         self._locations_to_songs = dict()
+        self._metadata_to_songs = dict()
         for song in songs:
             location = song['~filename']
             if location in self._locations_to_songs:
                 assert False, "%s contains multiple songs with the filename %s" % (songs_loc, location)
             self._locations_to_songs[location] = song
 
+            title = song['title']
+            artist = song['artist']
+            album = song['album']
+            tn = None
+            if song.get('tracknumber', ''):
+                tn = song['tracknumber']
+                if '/' in tn:
+                    tn = tn.split('/')[0]
+                tn = int(tn)
+            dn = None
+            if song.get('discnumber', ''):
+                dn = song['discnumber']
+                if '/' in dn:
+                    dn = dn.split('/')[0]
+                dn = int(dn)
+            self._metadata_to_songs[(title, artist, album, tn, dn)] = song
+
     def location_to_song(self, loc):
         if self._songs is None:
             self._songs = self._load_songs()
         return self._locations_to_songs[loc]
+
+    def lookup_song(self, key):
+        if self._songs is None:
+            self._songs = self._load_songs()
+        return self._metadata_to_songs[key]
 
     @property
     def songs(self):
@@ -85,7 +109,14 @@ class QLDb(MusicDb):
         try:
             return cls(qls.location_to_song(loc))
         except KeyError as e:
-            raise KeyError('No song with location %r exists in the songs library' % loc) from e
+            return None
+
+    @classmethod
+    def from_metadata(cls, md):
+        try:
+            return cls(qls.lookup_song((md.title, md.artist, md.album, md.tn, md.dn)))
+        except KeyError as e:
+            return None
 
     # Properties/descriptors
 
@@ -105,7 +136,9 @@ def main():
     import datetime
     track = QLDb.from_file(sys.argv[1])
 
+    print(track.wrapped)
     print(track.format())
+    print(repr(track))
 
     # del track.last_played
     # track.tnc = (1, 8)

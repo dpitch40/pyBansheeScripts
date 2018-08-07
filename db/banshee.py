@@ -82,7 +82,33 @@ class BansheeDb(MusicDb):
 
     @classmethod
     def from_file(cls, loc):
-        return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
+        try:
+            return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
+        except ValueError:
+            return None
+
+    @classmethod
+    def from_metadata(cls, md):
+        rows = list()
+        if md.artist and md.album and md.title:
+            where_str = " WHERE ct.Title = ? AND cl.Title = ? AND ca.Name = ?"
+
+            rows = db.sql(select_stmt % {'where': where_str}, md.title, md.album, md.artist)
+            if len(rows) == 1:
+                return cls._from_rows(rows)
+
+            if md.tn:
+                where_str += ' AND ct.TrackNumber = ?'
+                if md.dn:
+                    where_str += ' AND ct.Disc = ?'
+                    rows = db.sql(select_stmt % {'where': where_str}, md.title, md.album, md.artist, md.tn, md.dn)
+                else:
+                    rows = db.sql(select_stmt % {'where': where_str}, md.title, md.album, md.artist, md.tn)
+
+                if len(rows) == 1:
+                    return cls._from_rows(rows)
+
+        return None
 
     # other constructors for getting a track from the db
 

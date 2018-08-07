@@ -8,7 +8,6 @@ if not os.path.exists(dest):
         fObj.write(
 """# Override any of the values in defaults.py here
 
-CDDriveLoc =
 MusicDir =
 MediaDir =
 BaseDevice = "ROOT"

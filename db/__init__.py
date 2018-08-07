@@ -2,7 +2,9 @@ import importlib
 
 import config
 if config.DefaultDb:
-    config.DefaultDb = importlib.import_module('db.' + config.DefaultDb)
+    full_path = 'db.' + config.DefaultDb
+    import_path, class_name = full_path.rsplit('.', 1)
+    config.DefaultDb = getattr(importlib.import_module(import_path), class_name)
 
 def open_db(fname):
     if config.DefaultDb is None:

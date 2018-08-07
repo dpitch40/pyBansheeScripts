@@ -62,5 +62,12 @@ class MusicDb(FileBased):
     @classmethod
     @abc.abstractmethod
     def from_file(cls, loc):
-        """Initializes and returns a new object of this class from a file."""
+        """Initializes and returns a new object of this class from a file, or None if not matched."""
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def from_metadata(cls, metadata):
+        """Attempts to match a single song in the DB with the given metadata object. Creates a new
+            object of this class and returns it, or None if not matched."""
         raise NotImplementedError
