@@ -7,7 +7,7 @@ from db import open_db
 from core.util import sort_key, generate_disc_lens, get_fnames
 from parse import get_track_list
 
-def extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
+def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     keys = list()
     album, artist, title, tn, dn = metadata.album, metadata.artist, metadata.title, \
                                     metadata.tn, metadata.dn
@@ -38,7 +38,7 @@ def extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     return keys
 
 # Creates mappings from TrackID/(dn, tn)/(title, artist, album) tuples to MP3s
-def create_track_mapping(tracks):
+def _create_track_mapping(tracks):
     track_mapping = dict()
     dup_keys = set()
 
@@ -46,7 +46,7 @@ def create_track_mapping(tracks):
     disc_lens = generate_disc_lens(tracks)
 
     for i, track in enumerate(tracks):
-        possKeys = extract_keys(track, i, disc_lens)
+        possKeys = _extract_keys(track, i, disc_lens)
         
         # Ensure each mapping key is unique across all tracks
         for k in possKeys:
@@ -67,25 +67,25 @@ def match_metadata_to_files(metadatas, fnames, use_db=False):
         tracks = [open_music_file(fname) for fname in fnames]
     tracks.sort(key=sort_key)
 
-    track_mapping = create_track_mapping(tracks)
+    track_mapping = _create_track_mapping(tracks)
 
     matched = list()
     unmatched_metadatas = list()
 
     metadata_disc_lens = generate_disc_lens(metadatas)
     for i, metadata in enumerate(sorted(metadatas, key=sort_key)):
-        keys = extract_keys(metadata, i, metadata_disc_lens, True)
+        keys = _extract_keys(metadata, i, metadata_disc_lens, True)
         for key in keys:
             if key in track_mapping:
-                matched.append((metadata, track_mapping[key]))
+                matched.append((metadata, track_mapping[key].location))
                 # print('--- MATCHED on %s' % str(key))
                 break
         else:
             unmatched_metadatas.append(metadata)
 
-    unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(1), matched)]
+    unmatched_files = [t.location for t in tracks if t not in map(operator.itemgetter(1), matched)]
 
-    return matched, unmatched_metadatas, unmatched_tracks
+    return matched, unmatched_metadatas, unmatched_files
 
 def main():
     parser = argparse.ArgumentParser()
@@ -98,7 +98,7 @@ def main():
     metadatas = get_track_list(args.metadata_source)
     fnames = get_fnames(args.music_dir)
 
-    matched, unmatched_metadatas, unmatched_tracks = match_metadata_to_files(metadatas, fnames, args.use_db)
+    matched, unmatched_metadatas, unmatched_files = match_metadata_to_files(metadatas, fnames, args.use_db)
 
     for metadata, track in matched:
         print(metadata.format())

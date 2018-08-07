@@ -11,6 +11,7 @@ from core.util import get_fnames
 import config
 from parse import get_track_list
 from track import Track
+from match import match_metadata_to_files
 
 http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 
@@ -138,7 +139,7 @@ def main():
 
     args = parser.parse_args()
 
-    input_files = [open_music_file(fname) for fname in get_fnames(args.input)]
+    input_files = get_fnames(args.input)
 
     output_tracks = list()
     oom = args.output_or_metadata
@@ -146,12 +147,16 @@ def main():
         output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
     else:
         output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
+    output_metadatas = [t.db or t.mfile or t.other for t in output_tracks]
 
-    for f in input_files:
-        print(f.format())
-    print()
-    for t in output_tracks:
-        print(t.format())
+    matched, unmatched_tracks, unmatched_files = match_metadata_to_files(output_metadatas, input_files)
+
+    for output, input_ in matched:
+        print(input_)
+        print(output.format())
+        print()
+
+    print('%d/%d matched' % (len(matched), len(input_files)))
 
     # Rip(input_files, args.test, args.bitrate, args.input)
 
