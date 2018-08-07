@@ -11,3 +11,9 @@ def open_db(fname):
         raise ValueError('Must specify config.DefaultDb')
 
     return config.DefaultDb.from_file(fname)
+
+def db_from_metadata(metadata):
+    if config.DefaultDb is None:
+        raise ValueError('Must specify config.DefaultDb')
+
+    return config.DefaultDb.from_metadata(metadata)

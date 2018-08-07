@@ -1,8 +1,9 @@
 from collections import defaultdict
 import pprint
+import os.path
 
-from mfile import open_music_file
-from db import open_db
+from mfile import open_music_file, mapping as mfile_mapping
+from db import open_db, db_from_metadata
 from db.db import MusicDb
 from core.fd import FormattingDictLike
 
@@ -48,6 +49,21 @@ class Track(FormattingDictLike):
     @classmethod
     def from_file(cls, fname, other=None):
         return cls(open_music_file(fname), open_db(fname), other)
+
+    @classmethod
+    def from_metadata(cls, metadata):
+        if getattr(metadata, 'location', None):
+            return cls.from_file(metadata.location)
+
+        for ext in mfile_mapping.keys():
+            location = metadata.calculate_fname(ext=ext)
+            if os.path.isfile(location):
+                return cls.from_file(location, other=metadata)
+
+        db = db_from_metadata(metadata)
+        if db:
+            return cls(open_music_file(db.location), db, other=metadata)
+        return cls(other=metadata)
 
     def save(self):
         if self.mfile:
