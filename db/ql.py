@@ -34,7 +34,6 @@ class QLSongs(object):
                 assert False, "%s contains multiple songs with the filename %s" % (songs_loc, location)
             self._locations_to_songs[location] = song
 
-            title = song['title']
             artist = song['artist']
             album = song['album']
             tn = None
@@ -49,7 +48,7 @@ class QLSongs(object):
                 if '/' in dn:
                     dn = dn.split('/')[0]
                 dn = int(dn)
-            self._metadata_to_songs[(title, artist, album, tn, dn)] = song
+            self._metadata_to_songs[(artist, album, tn, dn)] = song
 
     def location_to_song(self, loc):
         if self._songs is None:
@@ -114,7 +113,7 @@ class QLDb(MusicDb):
     @classmethod
     def from_metadata(cls, md):
         try:
-            return cls(qls.lookup_song((md.title, md.artist, md.album, md.tn, md.dn)))
+            return cls(qls.lookup_song((md.artist, md.album, md.tn, md.dn)))
         except KeyError as e:
             return None
 

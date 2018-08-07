@@ -1,104 +1,107 @@
 import os
 import os.path
 import argparse
+import re
 from mfile import open_music_file
 
-from mutagen.mp3 import MP3
-from EasyID3Custom import EasyID3Custom as EasyID3
+# from mutagen.mp3 import MP3
+# from EasyID3Custom import EasyID3Custom as EasyID3
 
-from util import get_fnames
+from core.util import get_fnames
 import config
 from parse import get_track_list
 from track import Track
 
-def Rip(tracks, test, bitRate, number, inputLocs):
-    inputDirMapping = dict()
-    for c in Util.expandPath(inputLocs):
-        m = Metadata.trackNumRe.match(os.path.basename(c))
-        if m:
-            g = m.groups()
-            if g[0]:
-                inputDirMapping[(int(g[0]), int(g[1]))] = c
-            else:
-                inputDirMapping[int(g[1])] = c
-    matched = 0
-    minDisc = min(track.get("Disc", 100) for track in tracks)
-    if minDisc == 100:
-        minDisc = None
-    for track in tracks:
-        if "TrackNumber" not in track:
-            print "ERROR: Track %s must have a track number" % (track.name)
-            continue
-        else:
-            if track.get("Disc", None) is not None:
-                key = (track["Disc"], track["TrackNumber"])
-                if minDisc is None or minDisc == 1:
-                    altKey = None
-                else:
-                    altKey = (1, track["TrackNumber"])
-            else:
-                key = track["TrackNumber"]
-                altKey = (1, track["TrackNumber"])
-        if key in inputDirMapping:
-            inputFile = inputDirMapping[key]
-        elif altKey in inputDirMapping:
-            inputFile = inputDirMapping[altKey]
-        else:
-            print "ERROR: Could not find input track %s" % str(key)
-            continue
-        print inputFile
-        matched += RipTrack(track, test, bitRate, number, inputFile)
+http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 
-    print "%d/%d matched" % (matched, len(tracks))
+# def Rip(tracks, test, bitRate, number, inputLocs):
+#     inputDirMapping = dict()
+#     for c in Util.expandPath(inputLocs):
+#         m = Metadata.trackNumRe.match(os.path.basename(c))
+#         if m:
+#             g = m.groups()
+#             if g[0]:
+#                 inputDirMapping[(int(g[0]), int(g[1]))] = c
+#             else:
+#                 inputDirMapping[int(g[1])] = c
+#     matched = 0
+#     minDisc = min(track.get("Disc", 100) for track in tracks)
+#     if minDisc == 100:
+#         minDisc = None
+#     for track in tracks:
+#         if "TrackNumber" not in track:
+#             print "ERROR: Track %s must have a track number" % (track.name)
+#             continue
+#         else:
+#             if track.get("Disc", None) is not None:
+#                 key = (track["Disc"], track["TrackNumber"])
+#                 if minDisc is None or minDisc == 1:
+#                     altKey = None
+#                 else:
+#                     altKey = (1, track["TrackNumber"])
+#             else:
+#                 key = track["TrackNumber"]
+#                 altKey = (1, track["TrackNumber"])
+#         if key in inputDirMapping:
+#             inputFile = inputDirMapping[key]
+#         elif altKey in inputDirMapping:
+#             inputFile = inputDirMapping[altKey]
+#         else:
+#             print "ERROR: Could not find input track %s" % str(key)
+#             continue
+#         print inputFile
+#         matched += RipTrack(track, test, bitRate, number, inputFile)
 
-    if not test:
-        db.commit()
+#     print "%d/%d matched" % (matched, len(tracks))
 
-def RipTrack(track, test, bitRate, number, inputFile):
+#     if not test:
+#         db.commit()
 
-    fullName = track.getDestName(Metadata.musicDir)
-    prevName = track.get("Location", None)
-    if prevName is not None:
-        prevName = prevName.encode(Config.UnicodeEncoding)
+# def RipTrack(track, test, bitRate, number, inputFile):
 
-    matched = int(prevName is not None and prevName == fullName)
-    if matched:
-        actions = ["%-2d  >>>" % track["TrackNumber"]]
-    else:
-        actions = ["%-2d" % track["TrackNumber"]]
-        print '\nExisting\t%s (%s) !=\nNew\t\t%s (%s)' % \
-                (prevName, type(prevName).__name__, fullName, type(fullName).__name__)
+#     fullName = track.getDestName(Metadata.musicDir)
+#     prevName = track.get("Location", None)
+#     if prevName is not None:
+#         prevName = prevName.encode(Config.UnicodeEncoding)
 
-    fullNameSQL = db_glue.pathname2sql(fullName)
+#     matched = int(prevName is not None and prevName == fullName)
+#     if matched:
+#         actions = ["%-2d  >>>" % track["TrackNumber"]]
+#     else:
+#         actions = ["%-2d" % track["TrackNumber"]]
+#         print '\nExisting\t%s (%s) !=\nNew\t\t%s (%s)' % \
+#                 (prevName, type(prevName).__name__, fullName, type(fullName).__name__)
 
-    if track.matchedWithDB:
-        rows = db.sql("SELECT BitRate, Uri FROM CoreTracks WHERE TrackID = ?", track["TrackID"])
-        row = rows[0]
-        changes = list()
-        if row["BitRate"] != bitRate:
-            changes.append(("BitRate", bitRate))
-        if row["Uri"] != fullNameSQL:
-            changes.append(("Uri", fullNameSQL))
-        actions.append(', '.join(["%s = %s" % c for c in changes]))
+#     fullNameSQL = db_glue.pathname2sql(fullName)
 
-    # if prevName is None:
-    if inputFile:
-        track["Location"] = inputFile
-    print "%s\n    %s\n    Dest: %s" % ('\t'.join(actions), '\n'.join(str(track).split('\n')),
-                fullName)
+#     if track.matchedWithDB:
+#         rows = db.sql("SELECT BitRate, Uri FROM CoreTracks WHERE TrackID = ?", track["TrackID"])
+#         row = rows[0]
+#         changes = list()
+#         if row["BitRate"] != bitRate:
+#             changes.append(("BitRate", bitRate))
+#         if row["Uri"] != fullNameSQL:
+#             changes.append(("Uri", fullNameSQL))
+#         actions.append(', '.join(["%s = %s" % c for c in changes]))
 
-    if not test:
-        track.encode(fullName, bitRate)
+#     # if prevName is None:
+#     if inputFile:
+#         track["Location"] = inputFile
+#     print "%s\n    %s\n    Dest: %s" % ('\t'.join(actions), '\n'.join(str(track).split('\n')),
+#                 fullName)
 
-        if track.matchedWithDB:
-            fsize = os.path.getsize(fullName)
-            changes.append(("FileSize", fsize))
-            changeNames, changeVals = zip(*changes)
-            db.sql("UPDATE CoreTracks SET %s WHERE TrackID = ?" %
-                    ', '.join(["%s = ?" % cn for cn in changeNames]),
-                        *(tuple(changeVals) + (track["TrackID"],)))
-            # print "Updated database\tBitrate=%d\tFileSize=%d\tUri=%s" % (bitrate, fsize, fullNameSQL)
-    return matched
+#     if not test:
+#         track.encode(fullName, bitRate)
+
+#         if track.matchedWithDB:
+#             fsize = os.path.getsize(fullName)
+#             changes.append(("FileSize", fsize))
+#             changeNames, changeVals = zip(*changes)
+#             db.sql("UPDATE CoreTracks SET %s WHERE TrackID = ?" %
+#                     ', '.join(["%s = ?" % cn for cn in changeNames]),
+#                         *(tuple(changeVals) + (track["TrackID"],)))
+#             # print "Updated database\tBitrate=%d\tFileSize=%d\tUri=%s" % (bitrate, fsize, fullNameSQL)
+#     return matched
 
 def convert():
     infile = sys.argv[1]
@@ -139,7 +142,7 @@ def main():
 
     output_tracks = list()
     oom = args.output_or_metadata
-    if os.path.isfile(oom) or oom.lower().startswith('http://'):
+    if os.path.isfile(oom) or http_re.match(oom):
         output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
     else:
         output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]

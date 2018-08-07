@@ -26,11 +26,13 @@ class Track(FormattingDictLike):
             if source is not None:
                 subd = source.to_dict()
                 for k, v in subd.items():
-                    d[k][name] = v
+                    if v is not None:
+                        d[k][name] = v
         for k, source_dict in d.items():
             values_list = list(source_dict.values())
             if all((v == values_list[0] for v in values_list)):
                 d[k] = values_list[0]
+        d.default_factory = lambda: ''
 
         return d
 
