@@ -69,7 +69,7 @@ def match_metadata_to_files(metadatas, fnames, use_db=False):
 
     track_mapping = _create_track_mapping(tracks)
 
-    matched = list()
+    matched = dict()
     unmatched_metadatas = list()
 
     metadata_disc_lens = generate_disc_lens(metadatas)
@@ -77,7 +77,7 @@ def match_metadata_to_files(metadatas, fnames, use_db=False):
         keys = _extract_keys(metadata, i, metadata_disc_lens, True)
         for key in keys:
             if key in track_mapping:
-                matched.append((metadata, track_mapping[key].location))
+                matched[track_mapping[key].location] = metadata
                 # print('--- MATCHED on %s' % str(key))
                 break
         else:

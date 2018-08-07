@@ -35,7 +35,7 @@ class MappingWrapper(object):
             mapped_key = self._map_key(key)
             return self.get_item(mapped_key)
         else:
-            return super(MappingWrapper, self).__getattr__(key)
+            return super(MappingWrapper, self).__getattribute__(key)
 
     def __setattr__(self, key, value):
         if key in self.all_keys:

@@ -2,16 +2,19 @@ import os
 import os.path
 import argparse
 import re
-from mfile import open_music_file
+from mfile import open_music_file, mapping as mfile_mapping
 
 # from mutagen.mp3 import MP3
 # from EasyID3Custom import EasyID3Custom as EasyID3
 
-from core.util import get_fnames
 import config
+from core.metadata import Metadata
+from core.util import get_fnames
+from db.db import MusicDb
+from match import match_metadata_to_files
+from mfile.mfile import MusicFile
 from parse import get_track_list
 from track import Track
-from match import match_metadata_to_files
 
 http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 
@@ -104,28 +107,54 @@ http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 #             # print "Updated database\tBitrate=%d\tFileSize=%d\tUri=%s" % (bitrate, fsize, fullNameSQL)
 #     return matched
 
-def convert():
-    infile = sys.argv[1]
-    in_md = mfile.open_music_file(infile)
+def convert(infile, outfile, metadata, out_ext, bitrate):
+    in_md = open_music_file(infile)
     decoder = in_md.create_decoder()
 
-    out_ext = sys.argv[2]
-    base, in_ext = os.path.splitext(infile)
-    outfile = '%s%s' % (base, out_ext)
-    if in_ext.lower() == out_ext.lower() and os.path.exists(outfile):
-        outfile = '%s-1%s' % (base, out_ext)
     if os.path.exists(outfile):
         os.remove(outfile)
-    encoder = mfile.mapping[out_ext].create_encoder(outfile, in_md, 128)
+    encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate)
 
     decodedData, errs = decoder.communicate()
     encoder.communicate(decodedData)
 
-    encoded = mfile.open_music_file(outfile)
-    print(encoded.wrapped)
-    print(encoded.format())
-    print(repr(encoded))
+    encoded = open_music_file(outfile)
+    return encoded
 
+def transcode(input_files, oom, bitrate, test):
+
+    input_files = get_fnames(input_files)
+
+    output_tracks = list()
+    if os.path.isfile(oom) or http_re.match(oom):
+        output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
+    else:
+        output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
+    output_metadatas = [t.db or t.mfile or t.other for t in output_tracks]
+
+    matched, unmatched_tracks, unmatched_files = match_metadata_to_files(output_metadatas, input_files)
+
+    for fname in input_files:
+        print(fname)
+        if fname in matched:
+            metadata = matched[fname]
+            print(metadata.format())
+
+            dest = getattr(metadata, 'location', metadata.calculate_fname())
+            if not test:
+                ext = os.path.splitext(dest)[1]
+                encoded = convert(fname, dest, metadata, ext, bitrate)
+            else:
+                encoded = MusicFile(dest, {'bitrate': bitrate * 1000})
+
+            if isinstance(metadata, MusicDb):
+                metadata.update(encoded, False)
+                print(metadata.changes())
+        else:
+            print('NOT MATCHED')
+        print()
+
+    print('%d/%d matched' % (len(matched), len(input_files)))
 
 def main():
     parser = argparse.ArgumentParser(description="Transcode a set of music files.")
@@ -139,26 +168,7 @@ def main():
 
     args = parser.parse_args()
 
-    input_files = get_fnames(args.input)
-
-    output_tracks = list()
-    oom = args.output_or_metadata
-    if os.path.isfile(oom) or http_re.match(oom):
-        output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
-    else:
-        output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
-    output_metadatas = [t.db or t.mfile or t.other for t in output_tracks]
-
-    matched, unmatched_tracks, unmatched_files = match_metadata_to_files(output_metadatas, input_files)
-
-    for output, input_ in matched:
-        print(input_)
-        print(output.format())
-        print()
-
-    print('%d/%d matched' % (len(matched), len(input_files)))
-
-    # Rip(input_files, args.test, args.bitrate, args.input)
+    transcode(args.input, args.output_or_metadata, args.bitrate, args.test)
 
 if __name__ == "__main__":
     main()

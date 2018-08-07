@@ -7,6 +7,8 @@ from core.mw import MappingWrapper
 from core.fd import FormattingDictLike
 from core.util import filter_path_elements
 
+NOT_FOUND = object()
+
 class Metadata(MappingWrapper, FormattingDictLike):
     sigil = '#'
 
@@ -30,6 +32,8 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 'length', # Float/Int number of milliseconds
                 )
 
+    derived_keys = {'tnc', 'dnc'}
+
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
                     '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss']
 
@@ -38,11 +42,15 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     def update_changes(self, other, copy_none=True):
         changes = dict()
-        for k in other.all_keys:
-            if k in self.all_keys:
-                v = getattr(other, k)
-                if v != getattr(self, k) and (v is not None or copy_none):
-                    changes[k] = v
+        for k in self.all_keys:
+            if k in self.derived_keys or k in self.read_only_keys:
+                continue
+            v = getattr(other, k, NOT_FOUND)
+            if v is NOT_FOUND:
+                continue
+
+            if v != getattr(self, k) and (v is not None or copy_none):
+                changes[k] = v
         return changes
 
     def update(self, other, copy_none=True):

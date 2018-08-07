@@ -22,9 +22,6 @@ class MusicFile(FileBased):
                     '%(location)s']
 
     def __init__(self, fname, d):
-        if os.path.splitext(fname)[1].lower() != self.ext:
-            raise ValueError('Cannot open the file %s with %s' % (fname,
-                                    self.__class__.__name__))
         self.fname = fname
         super(MusicFile, self).__init__(d)
 
@@ -56,18 +53,15 @@ class MusicFile(FileBased):
 
     # To be overridden
 
-    @abc.abstractmethod
     def rebase(self, new_fname):
         """Rebases this MusicFile on a new file location."""
         raise NotImplementedError
 
-    @abc.abstractmethod
     def create_decoder(self):
         """Returns a subprocess for decoding this file, outputting to stdout."""
         raise NotImplementedError
 
     @classmethod
-    @abc.abstractmethod
     def create_encoder(self, fname, metadata, bitrate):
         """Returns a subprocess for encoding data from stdin to the specified filename."""
         raise NotImplementedError

@@ -14,23 +14,24 @@ class FileBased(Metadata):
         """Returns the changes that have been made to the object, as the difference
            between the current state and the staged copy."""
         changes = dict()
-        for key in self.all_keys:
-            if name in self.wrapped:
-                if self.wrapped[name] != self.staged.get(name, None):
-                    changes[key] = self.wrapped[name]
-            elif name in self.staged:
-                changes[key] = None
+        current_state = self.to_dict()
+        for k, v in current_state.items():
+            if v != self.staged.get(k, None):
+                changes[k] = v
+        for k in self.staged.keys():
+            if k not in current_state:
+                changes[k] = None
+
         return changes
 
     def _copy_changes(self):
-        self.staged = dict(self.wrapped)
+        self.staged = self.to_dict()
 
     def save(self):
         """Copies all current changes over to the staged copy, then writes them to
            the backing file/database."""
         self._save(self.changes())
 
-    @abc.abstractmethod
     def _save(self):
         """Saves all currently staged changes to the backing file.
 
