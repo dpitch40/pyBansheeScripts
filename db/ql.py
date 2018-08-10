@@ -114,9 +114,12 @@ class QLDb(MusicDb):
 
     @classmethod
     def _ql_query(cls, query):
-        sp = subprocess.run(['quodlibet', '--print-query=%s' %
-                    query], stdout=subprocess.PIPE, check=True,
-                    universal_newlines=True)
+        try:
+            sp = subprocess.run(['quodlibet', '--print-query=%s' %
+                        query], stdout=subprocess.PIPE, check=True,
+                        universal_newlines=True)
+        except subprocess.CalledProcessError as ex:
+            raise SystemExit
         returned_lines = sp.stdout.strip()
         return returned_lines.split('\n')
 
