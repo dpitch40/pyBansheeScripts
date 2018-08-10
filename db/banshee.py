@@ -81,6 +81,51 @@ class BansheeDb(MusicDb):
         return [cls(row) for row in db.sql(select_stmt % {'where': ''})]
 
     @classmethod
+    def _load_playlists(cls):
+        playlists = list()
+
+        #Get the listings of playlists
+        playlists = db.sql("SELECT Name, PlaylistID FROM CorePlaylists")
+        smart_playlists = db.sql("SELECT Name, SmartPlaylistID AS PlaylistID "
+                      "FROM CoreSmartPlaylists")
+
+        return playlists, smart_playlists
+
+    @classmethod
+    def load_playlists(cls):
+        playlists, smart_playlists = cls._load_playlists()
+        all_tracks = cls.load_all()
+        track_ids_to_tracks = dict([(track.id_, track) for track in all_tracks])
+        smart_playlist_entries = db.sql('SELECT EntryID, SmartPlaylistID AS '
+                                'PlaylistID, TrackID FROM CoreSmartPlaylistEntries '
+                                'ORDER BY EntryID')
+
+        all_playlists = dict()
+        for pl_row in playlists:
+            name = pl_row['Name']
+            pl_id = pl_row['PlaylistID']
+            pl_list = list()
+            playlist_entries = db.sql('SELECT EntryID, TrackID FROM '
+                        'CorePlaylistEntries WHERE PlaylistID = ? '
+                        'ORDER BY ViewOrder, EntryID', pl_id)
+            for row in playlist_entries:
+                pl_list.append(track_ids_to_tracks[row['TrackID']])
+            all_playlists[name] = pl_list
+
+        for pl_row in smart_playlists:
+            name = pl_row['Name']
+            pl_id = pl_row['PlaylistID']
+            pl_list = list()
+            playlist_entries = db.sql('SELECT EntryID, TrackID FROM '
+                        'CoreSmartPlaylistEntries WHERE SmartPlaylistID = ? '
+                        'ORDER BY EntryID', pl_id)
+            for row in playlist_entries:
+                pl_list.append(track_ids_to_tracks[row['TrackID']])
+            all_playlists[name] = pl_list
+
+        return all_playlists
+
+    @classmethod
     def from_file(cls, loc):
         try:
             return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))

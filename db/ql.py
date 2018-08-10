@@ -1,4 +1,7 @@
 import operator
+import os.path
+import os
+import subprocess
 
 from quodlibet.formats import load_audio_files, dump_audio_files
 
@@ -7,6 +10,8 @@ import config
 from core.util import date_descriptor, int_descriptor, make_descriptor_func, make_numcount_descriptors
 
 songs_loc = config.QLSongsLoc
+lists_dir = os.path.join(os.path.dirname(songs_loc), 'lists')
+playlists_dir = os.path.join(os.path.dirname(songs_loc), 'playlists')
 
 class QLSongs(object):
     def __init__(self):
@@ -47,7 +52,11 @@ class QLSongs(object):
                 dn = song['discnumber']
                 if '/' in dn:
                     dn = dn.split('/')[0]
-                dn = int(dn)
+                try:
+                    dn = int(dn)
+                except ValueError:
+                    print(song)
+                    raise
             self._metadata_to_songs[(artist, album, tn, dn)] = song
 
     def location_to_song(self, loc):
@@ -102,6 +111,41 @@ class QLDb(MusicDb):
     @classmethod
     def load_all(cls):
         return qls.songs
+
+    @classmethod
+    def _ql_query(cls, query):
+        sp = subprocess.run(['quodlibet', '--print-query=%s' %
+                    query], stdout=subprocess.PIPE, check=True,
+                    universal_newlines=True)
+        returned_lines = sp.stdout.strip()
+        return returned_lines.split('\n')
+
+    @classmethod
+    def load_playlists(cls):
+        playlists = dict()
+        for pl_file in os.listdir(playlists_dir):
+            pl_list = list()
+            with open(os.path.join(playlists_dir, pl_file), 'r') as fobj:
+                for line in fobj.readlines():
+                    line = line.strip()
+                    pl_list.append(cls.from_file(line))
+            playlists[pl_file] = pl_list
+
+        # Smart playlists
+
+        queries_file = os.path.join(lists_dir, 'queries.saved')
+        if os.path.isfile(queries_file):
+            with open(queries_file, 'r') as fobj:
+                query = fobj.readline().strip()
+                while query != '':
+                    name = cur_line = fobj.readline().strip()
+                    pl_list = list()
+                    for line in cls._ql_query(query):
+                        pl_list.append(cls.from_file(line))
+                    playlists[name] = pl_list
+                    query = fobj.readline().strip()
+
+        return playlists
 
     @classmethod
     def from_file(cls, loc):

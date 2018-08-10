@@ -10,68 +10,33 @@ import datetime
 import difflib
 from subprocess import call, Popen, PIPE
 import re
+import logging
+import enum
 
-from mutagen.mp3 import MP3
-from EasyID3Custom import EasyID3Custom as EasyID3
-
-sys.path.append(os.path.expanduser(os.path.join('~', 'Programs', 'Python', 'Music')))
-sys.path.append(os.path.abspath(os.pardir))
-import Config
+import config
 import Util
 import Queue
 import db_glue
 import Track
 import SyncPlaylist
 
-global debugLevel
 global showSkipped
 
-# global playlistIDsToTracks
-# global allTracks
-# global trackIDsToTracks
-
-SYNC = 0
-DELETE = 1
-SKIP = 2
-ENCODE = 3
+class Action(enum.Enum):
+    SYNC = 0
+    DELETE = 1
+    SKIP = 2
+    ENCODE = 3
 
 lame_input_formats = ('.mp3', '.wav')
 
-dbloc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
-
-db = db_glue.new(dbloc)
-Track.db = db
-
 stopEvent = threading.Event()
 
-PLAYLISTS_TO_SYNC = Config.PlaylistsToSync
+PLAYLISTS_TO_SYNC = config.PlaylistsToSync
+BASE_DIR = config.MediaDir
+BASE_DEVICE = config.BaseDevice
 
-NONE = 0
-ERRORS = 1
-WARNINGS = 2
-NOTES = 3
-DEBUG = 4
-
-BASE_DIR = Config.MediaDir
-BASE_DEVICE = Config.BaseDevice
-
-debugLevel = DEBUG
-
-def debug(s):
-    if debugLevel >= DEBUG:
-        print "DEBUG  : %s" % s
-
-def note(s):
-    if debugLevel >= NOTES:
-        print "NOTE   : %s" % s
-
-def warn(s):
-    if debugLevel >= WARNINGS:
-        print "WARNING: %s" % s
-
-def error(s):
-    if debugLevel >= ERRORS:
-        print "ERROR  : %s" % s
+log = logging.getLogger()
 
 #------------------------------------------------------------------------------
 # CHECKER THREAD
@@ -156,8 +121,8 @@ def get_changes(allTracks, changes, bitrate):
                 onDiskStamp = datetime.datetime.fromtimestamp(onDiskTime)
                 onPlayerStamp = datetime.datetime.fromtimestamp(onPlayerTime)
                 daysNewer = (onDiskStamp - onPlayerStamp).days
-                onDiskS = onDiskStamp.strftime(Config.TsFmt)
-                onPlayerS = onPlayerStamp.strftime(Config.TsFmt)
+                onDiskS = onDiskStamp.strftime(config.TsFmt)
+                onPlayerS = onPlayerStamp.strftime(config.TsFmt)
                 # File on disk has been modified more recently
                 if encodeNeeded:
                     # action, reason = ENCODE, "File has been modified; %s > %s" % (onDiskS, onPlayerS)
@@ -213,7 +178,7 @@ def track_sync(changes, dryrun, bitrate, size):
         destDir = os.path.dirname(dest)
         
         if action == DELETE:
-            note("Deleting\t!%s!" % dest)
+            log.info("Deleting\t!%s!" % dest)
 
             if destDir in dirSizes:
                 dirSizes[destDir] -= 1
@@ -225,12 +190,12 @@ def track_sync(changes, dryrun, bitrate, size):
             if not dryrun:
                 os.remove(dest)
             if dirSizes[destDir] == 0:
-                note("Removing\t%s" % destDir)
+                log.info("Removing\t%s" % destDir)
                 if not dryrun:
                     try:
                         os.removedirs(destDir)
                     except OSError:
-                        error("***ERROR:\tCould not remove %s, it is not empty" % destDir)
+                        log.error("***ERROR:\tCould not remove %s, it is not empty" % destDir)
             deleted += 1
 
         elif action == SYNC:
@@ -250,16 +215,16 @@ def track_sync(changes, dryrun, bitrate, size):
                     if tag not in audio or audio[tag][0] != track[fieldName]:
                         tagChanges.append((tag, fieldName))
                 if len(tagChanges) > 0:
-                    debug("Re-tagging\t%s" % 
+                    log.debug("Re-tagging\t%s" % 
                             ', '.join(["%s: %s -> %s" % (tag, audio.get(tag, ['""'])[0], track[fieldName])
                                     for tag, fieldName in tagChanges]))
 
             if destDir not in createdDirs and not os.path.exists(destDir):
-                note("Creating\t%s" % destDir)
+                log.info("Creating\t%s" % destDir)
                 createdDirs.add(destDir)
                 if not dryrun:
                     os.makedirs(destDir)
-            note("Syncing \t%s\t(%s)" % (dest, reason))
+            log.info("Syncing \t%s\t(%s)" % (dest, reason))
             if not dryrun:
                 if loc.lower().endswith(".mp3"):
                     if len(tagChanges) > 0:
@@ -288,17 +253,17 @@ def track_sync(changes, dryrun, bitrate, size):
 
         elif action == ENCODE:
             if destDir not in createdDirs and not os.path.exists(destDir):
-                note("Creating\t%s" % destDir)
+                log.info("Creating\t%s" % destDir)
                 createdDirs.add(destDir)
                 if not dryrun:
                     os.makedirs(destDir)
-            note("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
+            log.info("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
             if not dryrun:
                 track.encode(dest, bitrate)
             encoded += 1
         else:
             if showSkipped:
-                note("Skipping\t%s\t(%s)" % (dest, reason))
+                log.info("Skipping\t%s\t(%s)" % (dest, reason))
             skipped += 1
 
     outStr = '%d synced\t%d encoded\t%d skipped\t %d deleted' % (synced, encoded, skipped, deleted)
@@ -309,7 +274,7 @@ def track_sync(changes, dryrun, bitrate, size):
             sizeStr = '+' + sizeStr
             sizeStrMB = '+' + sizeStrMB
         outStr = "%s\t%s bytes (%s MB)" % (outStr, sizeStr, sizeStrMB)
-    note(outStr)
+    log.info(outStr)
     stopEvent.set()
 
 #------------------------------------------------------------------------------
@@ -583,7 +548,7 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
                                           sortOrder, trackIDsToTracks)
 
             if pText:
-                pDest = pDest.encode(Config.UnicodeEncoding)
+                pDest = pDest.encode(config.UnicodeEncoding)
                 playlistTexts[pDest] = pText
 
     # Get list of playlists already on drive
@@ -603,24 +568,24 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
     for pDest in toSync:
         text = playlistTexts[pDest]
         toSyncTexts.append(text)
-        note("Syncing playlist\t%s" % pDest)
+        log.info("Syncing playlist\t%s" % pDest)
 
     # Playlists to update
     for pDest in common:
         text = playlistTexts[pDest]
         if isinstance(text, unicode):
-            text = text.encode(Config.UnicodeEncoding)
+            text = text.encode(config.UnicodeEncoding)
         existing = open(pDest, 'rU').read()
         if text != existing:
             oldLines = existing.split('\n')
             newLines = text.split('\n')
 
-            note("Updating playlist\t%s" % pDest)
+            log.info("Updating playlist\t%s" % pDest)
 
-            if "Transient" in pDest:#debugLevel == DEBUG:
+            if "Transient" in pDest:
                 isJunk = lambda s: s.strip() == ''
                 matcher = difflib.SequenceMatcher(isjunk=isJunk, a=oldLines, b=newLines)
-                debug("Playlists are %.1f%% similar" % (matcher.ratio() * 100))
+                log.debug("Playlists are %.1f%% similar" % (matcher.ratio() * 100))
 
                 d = difflib.Differ(isJunk)
                 blockStarted = True
@@ -631,27 +596,27 @@ def syncPlaylists(playlists, trackIDsToTracks, dryrun):
                     if line.startswith('-'):
                         if not blockStarted:
                             blockStarted = True
-                        debug(l)
+                        log.debug(l)
                     else:
                         blockStarted = False
-                        debug(l)
+                        log.debug(l)
 
 
             toSync.append(pDest)
             toSyncTexts.append(text)
         elif showSkipped:
-            note("Skipping playlist\t%s" % pDest)
+            log.info("Skipping playlist\t%s" % pDest)
 
     # Playlists to remove
     for pDest in toRemove:
-        note("Deleting playlist\t!%s!" % pDest)
+        log.info("Deleting playlist\t!%s!" % pDest)
 
     # Execute changes
     if not dryrun:
         for pDest, pText in zip(toSync, toSyncTexts):
             with open(pDest, 'w') as f:
                 if isinstance(pText, unicode):
-                    pText = pText.encode(Config.UnicodeEncoding)
+                    pText = pText.encode(config.UnicodeEncoding)
                 f.write(pText)
 
         for pDest in toRemove:
@@ -666,38 +631,40 @@ def sync(allTracks, bitrate, dryrun=False, size=False):
     syncer.start()
 
 def main():
-    global debugLevel
     global showSkipped
 
     parser = argparse.ArgumentParser(description="Sync specified playlists to a "
-                    "portable music player. (Specify them in Config.py)")
+                    "portable music player. (Specify them in config/user.py)")
     parser.add_argument('-t', "--test", action="store_true",
                         help="Only preview changes, do not actually make them.")
     parser.add_argument('-b', dest="bitrate", default=None, type=int,
             help="Specify the bit rate to encode files to. Any files with a higher "
                 "bit rate will be converted down to save space. If not specified, does not "
                 "convert files; copies them as-is.")
-    parser.add_argument("-s", "--silent", action="store_true",
-            help="Minimize output to the console.")
-    parser.add_argument("-q", "--quiet", action="store_true",
-            help="Minimize output to the console.")
-    parser.add_argument("-v", "--verbose", action="store_true",
-            help="Maximize output to the console.")
     parser.add_argument("--size", action="store_true",
                 help="Calculate the total data size (in bytes) added or removed")
     parser.add_argument("--show-skipped", action="store_true",
                 help="Show files that were not synced or updated")
 
+    parser.add_argument("-q", "--quiet", action="store_true",
+            help="Minimize output to the console.")
+    parser.add_argument("-s", "--silent", action="store_true",
+            help="Minimize output to the console even more.")
+    parser.add_argument("-v", "--verbose", action="store_true",
+            help="Maximize output to the console.")
+
     args = parser.parse_args()
 
     if args.verbose:
-        debugLevel = DEBUG
+        debugLevel = logging.DEBUG
     elif args.quiet:
-        debugLevel = WARNINGS
+        debugLevel = logging.WARNING
     elif args.silent:
-        debugLevel = ERRORS
+        debugLevel = logging.ERROR
     else:
-        debugLevel = NOTES
+        debugLevel = logging.INFO
+    log.setLevel(debugLevel)
+
     showSkipped = args.show_skipped
 
     allDevices = os.listdir(BASE_DIR)
@@ -706,7 +673,7 @@ def main():
     # Find the IDs of all the tracks to sync
     plNames = list()
     for pName, pInfo in sorted(PLAYLISTS_TO_SYNC.items(),
-                               key=lambda i: Config.DeviceOrder.index(i[1][0])):
+                               key=lambda i: config.DeviceOrder.index(i[1][0])):
         if pInfo[0] in allDevices:
             plNames.append(pName)
     playlists = get_playlists(plNames)

@@ -61,6 +61,14 @@ class MusicDb(FileBased):
 
     @classmethod
     @abc.abstractmethod
+    def load_playlists(cls):
+        """For all playlists, loads and returns a mapping from playlist name to a list
+           of MusicDb instances corresponding to the tracks in that playlist. NOTE: Multiple
+           playlists can contain references to the same object."""
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
     def from_file(cls, loc):
         """Initializes and returns a new object of this class from a file, or None if not matched."""
         raise NotImplementedError
