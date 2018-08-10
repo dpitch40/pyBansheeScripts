@@ -1,24 +1,16 @@
 import os.path
 import os
-import urllib
-import sys
 import shutil
 import threading
 import argparse
 import operator
 import datetime
-import difflib
-from subprocess import call, Popen, PIPE
-import re
 import logging
 import enum
+import collections
 
 import config
-import Util
-import Queue
-import db_glue
-import Track
-import SyncPlaylist
+from core.util import compare_filesets, excape_xml_chars, pathname2xml, sort_key
 
 global showSkipped
 
@@ -35,8 +27,6 @@ stopEvent = threading.Event()
 PLAYLISTS_TO_SYNC = config.PlaylistsToSync
 BASE_DIR = config.MediaDir
 BASE_DEVICE = config.BaseDevice
-
-log = logging.getLogger()
 
 #------------------------------------------------------------------------------
 # CHECKER THREAD
@@ -178,7 +168,7 @@ def track_sync(changes, dryrun, bitrate, size):
         destDir = os.path.dirname(dest)
         
         if action == DELETE:
-            log.info("Deleting\t!%s!" % dest)
+            logging.info("Deleting\t!%s!" % dest)
 
             if destDir in dirSizes:
                 dirSizes[destDir] -= 1
@@ -190,12 +180,12 @@ def track_sync(changes, dryrun, bitrate, size):
             if not dryrun:
                 os.remove(dest)
             if dirSizes[destDir] == 0:
-                log.info("Removing\t%s" % destDir)
+                logging.info("Removing\t%s" % destDir)
                 if not dryrun:
                     try:
                         os.removedirs(destDir)
                     except OSError:
-                        log.error("***ERROR:\tCould not remove %s, it is not empty" % destDir)
+                        logging.error("***ERROR:\tCould not remove %s, it is not empty" % destDir)
             deleted += 1
 
         elif action == SYNC:
@@ -215,16 +205,16 @@ def track_sync(changes, dryrun, bitrate, size):
                     if tag not in audio or audio[tag][0] != track[fieldName]:
                         tagChanges.append((tag, fieldName))
                 if len(tagChanges) > 0:
-                    log.debug("Re-tagging\t%s" % 
+                    logging.debug("Re-tagging\t%s" % 
                             ', '.join(["%s: %s -> %s" % (tag, audio.get(tag, ['""'])[0], track[fieldName])
                                     for tag, fieldName in tagChanges]))
 
             if destDir not in createdDirs and not os.path.exists(destDir):
-                log.info("Creating\t%s" % destDir)
+                logging.info("Creating\t%s" % destDir)
                 createdDirs.add(destDir)
                 if not dryrun:
                     os.makedirs(destDir)
-            log.info("Syncing \t%s\t(%s)" % (dest, reason))
+            logging.info("Syncing \t%s\t(%s)" % (dest, reason))
             if not dryrun:
                 if loc.lower().endswith(".mp3"):
                     if len(tagChanges) > 0:
@@ -253,17 +243,17 @@ def track_sync(changes, dryrun, bitrate, size):
 
         elif action == ENCODE:
             if destDir not in createdDirs and not os.path.exists(destDir):
-                log.info("Creating\t%s" % destDir)
+                logging.info("Creating\t%s" % destDir)
                 createdDirs.add(destDir)
                 if not dryrun:
                     os.makedirs(destDir)
-            log.info("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
+            logging.info("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
             if not dryrun:
                 track.encode(dest, bitrate)
             encoded += 1
         else:
             if showSkipped:
-                log.info("Skipping\t%s\t(%s)" % (dest, reason))
+                logging.info("Skipping\t%s\t(%s)" % (dest, reason))
             skipped += 1
 
     outStr = '%d synced\t%d encoded\t%d skipped\t %d deleted' % (synced, encoded, skipped, deleted)
@@ -274,7 +264,7 @@ def track_sync(changes, dryrun, bitrate, size):
             sizeStr = '+' + sizeStr
             sizeStrMB = '+' + sizeStrMB
         outStr = "%s\t%s bytes (%s MB)" % (outStr, sizeStr, sizeStrMB)
-    log.info(outStr)
+    logging.info(outStr)
     stopEvent.set()
 
 #------------------------------------------------------------------------------
@@ -285,342 +275,277 @@ def track_sync(changes, dryrun, bitrate, size):
 # Initialization
 #------------------------------------------------------------------------------
 
-# Returns a list of dicts, one for each playlist, with the keys "Name" and "PlaylistID"
-def get_playlists(names):
-    playlists = list()
-    
-    for name in names:
-        smart = False
-        #Get the listings of playlists
-        rows = db.sql("SELECT Name, PlaylistID FROM CorePlaylists WHERE Name = ?", name)
-        if not rows:
-            rows = db.sql("SELECT Name, SmartPlaylistID AS PlaylistID "
-                          "FROM CoreSmartPlaylists WHERE Name = ?", name)
-            smart = True
-        # for r in sorted(rows, key=lambda r: names.index(r["Name"])):
-        if not rows:
-            raise ValueError, "Playlist not found: %s" % name
-        r = rows[0]
-        r["Smart"] = smart
-        playlists.append(r)
-        
-    return playlists
-
-def getTracksByPlaylist(playlist, useDB):
-    # db = db_glue.new(dbloc)
-    smart = playlist["Smart"]
-    if smart:
-        pl = "Smart"
-        vo = ''
-    else:
-        pl = ''
-        vo = ", cpe.ViewOrder as ViewOrder"
-    rows = db.sql("""SELECT
-        ct.TrackID AS TrackID,
-        ct.Title AS Title,
-        ca.Name AS Artist,
-        ca.ArtistID as ArtistID,
-        cl.Title AS Album,
-        cl.AlbumID as AlbumID,
-        cl.ArtistName AS AlbumArtist,
-        cl.ArtistID AS AlbumArtistID,
-        ct.Genre AS Genre,
-        ct.Year AS Year,
-        ct.TrackNumber AS TrackNumber,
-        ct.TrackCount AS TrackCount,
-        ct.Disc AS Disc,
-        ct.DiscCount AS DiscCount,
-        ct.Uri AS Uri,
-        ct.Duration AS Duration,
-        ct.BitRate AS BitRate,
-        ct.FileSize AS FileSize,
-        cpe.EntryID AS entryID%s
-    FROM Core%sPlaylistEntries cpe
-    JOIN CoreTracks ct ON cpe.TrackID = ct.TrackID,
-          CoreAlbums cl ON ct.AlbumID = cl.AlbumID,
-          CoreArtists ca ON ct.ArtistID = ca.ArtistID
-    WHERE cpe.%sPlaylistID = ?
-    ORDER BY Artist, Album, Disc, TrackNumber""" % (vo, pl, pl), playlist["PlaylistID"])
-
-    albumArtists = dict()
-    for r in rows:
-        r["Location"] = db_glue.sql2pathname(str(r["Uri"]))
-        if r['Artist'] is None:
-            r['Artist'] = 'Unknown Artist'
-        if r['Album'] is None:
-            r['Album'] = 'Unknown Album'
-        if r['AlbumArtist'] is None:
-            r['AlbumArtist'] = r['Artist']
-
-        if r['AlbumArtistID'] not in albumArtists:
-            artistAlbums = albumArtists[r['AlbumArtistID']] = set()
-        else:
-            artistAlbums = albumArtists[r['AlbumArtistID']]
-        if r['AlbumID'] not in artistAlbums:
-            artistAlbums.add(r['AlbumID'])
-
-    singletons = findSingletons(db, playlist, rows, albumArtists)
-
-    tracks = list()
-    for r in rows:
-        sources = [Track.TRACKLIST]
-        if useDB:
-            sources.append(Track.DB)
-        track = Track.Track(sources, isSingleton=r["TrackID"] in singletons, **r)
-        for k, v in r.items():
-            if k not in track:
-                track.extraData[k] = v
-        tracks.append(track)
-
-    return tracks
-
 # Returns a set containing TrackIDs of singleton tracks
-def findSingletons(db, playlist, rows, albumArtists):
-    singletons = set()
-    playlistID = playlist["PlaylistID"]
-    if playlist["Smart"]:
-        pl = "Smart"
-    else:
-        pl = ''
+# def findSingletons(db, playlist, rows, albumArtists):
+#     singletons = set()
+#     playlistID = playlist["PlaylistID"]
+#     if playlist["Smart"]:
+#         pl = "Smart"
+#     else:
+#         pl = ''
 
-    fullArtists = set()
-    # countByAlbumArtist = dict()
-    for albumArtistID, albumIDs in sorted(albumArtists.items()):
-        c = 0
-        for albumID in albumIDs:
-            # Get info on all the tracks in this album and in the playlist
-            byTrackInfo = db.sql("""SELECT ct.TrackID, ct.TrackCount, ct.Disc, ct.DiscCount
-FROM CoreTracks ct JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID
-WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), albumID, playlistID)
-            c += len(byTrackInfo)
+#     fullArtists = set()
+#     # countByAlbumArtist = dict()
+#     for albumArtistID, albumIDs in sorted(albumArtists.items()):
+#         c = 0
+#         for albumID in albumIDs:
+#             # Get info on all the tracks in this album and in the playlist
+#             byTrackInfo = db.sql("""SELECT ct.TrackID, ct.TrackCount, ct.Disc, ct.DiscCount
+# FROM CoreTracks ct JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID
+# WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), albumID, playlistID)
+#             c += len(byTrackInfo)
 
-            # Get album title
-            # title = db.sql("SELECT Title from CoreAlbums where AlbumID = ?",
-            #                 (albumID,))[0]["Title"]
+#             # Get album title
+#             # title = db.sql("SELECT Title from CoreAlbums where AlbumID = ?",
+#             #                 (albumID,))[0]["Title"]
 
-            # full = False
-            for r in byTrackInfo:
-                disc = r["Disc"]
-                tc = r["TrackCount"]
-                dc = r["DiscCount"]
-                # If multiple discs, select just this track's disc
-                if not dc:
-                    where = "ct.AlbumID = ? AND cpe.%sPlaylistID = ?" % pl
-                    args = (albumID, playlistID)
-                else:
-                    where = "ct.AlbumID = ? AND ct.Disc = ? AND cpe.%sPlaylistID = ?" % pl
-                    args = (albumID, disc, playlistID)
-                # Check how many songs from this disc are in the playlist
-                discCountOnPL = db.sql("""SELECT COUNT(*) as c FROM CoreTracks ct
-JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID WHERE %s""" % (pl, where), *args)[0]['c']
+#             # full = False
+#             for r in byTrackInfo:
+#                 disc = r["Disc"]
+#                 tc = r["TrackCount"]
+#                 dc = r["DiscCount"]
+#                 # If multiple discs, select just this track's disc
+#                 if not dc:
+#                     where = "ct.AlbumID = ? AND cpe.%sPlaylistID = ?" % pl
+#                     args = (albumID, playlistID)
+#                 else:
+#                     where = "ct.AlbumID = ? AND ct.Disc = ? AND cpe.%sPlaylistID = ?" % pl
+#                     args = (albumID, disc, playlistID)
+#                 # Check how many songs from this disc are in the playlist
+#                 discCountOnPL = db.sql("""SELECT COUNT(*) as c FROM CoreTracks ct
+# JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID WHERE %s""" % (pl, where), *args)[0]['c']
 
-                # Consider this album a "full album" if any of its discs has all its tracks
-                # represented in the playlist, or it if the count is "close enough")
-                if tc > 0 and (discCountOnPL == tc or 
-                    (discCountOnPL >= 8 and discCountOnPL + 4 >= tc) or
-                    (discCountOnPL >= 4 and discCountOnPL + 1 >= tc)):
-                    # fullDiscs.add((albumID, disc, title))
-                    # This artist has at least one "full" disc
-                    fullArtists.add(albumArtistID)
-                    break
+#                 # Consider this album a "full album" if any of its discs has all its tracks
+#                 # represented in the playlist, or it if the count is "close enough")
+#                 if tc > 0 and (discCountOnPL == tc or
+#                     (discCountOnPL >= 8 and discCountOnPL + 4 >= tc) or
+#                     (discCountOnPL >= 4 and discCountOnPL + 1 >= tc)):
+#                     # fullDiscs.add((albumID, disc, title))
+#                     # This artist has at least one "full" disc
+#                     fullArtists.add(albumArtistID)
+#                     break
 
-        # countByAlbumArtist[albumArtistID] = c
-        if c >= 5 and albumArtistID not in fullArtists:
-            fullArtists.add(albumArtistID)
-            # fullArtists |= set(albumIDs)
+#         # countByAlbumArtist[albumArtistID] = c
+#         if c >= 5 and albumArtistID not in fullArtists:
+#             fullArtists.add(albumArtistID)
+#             # fullArtists |= set(albumIDs)
 
-    for r in rows:
-        if r['AlbumArtistID'] not in fullArtists:
-            singletons.add(r["TrackID"])
+#     for r in rows:
+#         if r['AlbumArtistID'] not in fullArtists:
+#             singletons.add(r["TrackID"])
 
-    return singletons
+#     return singletons
 
-# Returns a fairly comprehensive listing of all the tracks whose IDs are supplied.
-def getTrackIDstoTracks(playlists):
-    # tracks = list()
-    # IDsToDirs = dict()
-    trackIDsToTracks = dict()
-    # Mapping from playlist ID to corresponding tracks
-    # playlistIDsToTracks = dict()
-    # List of all tracks to be synced
-    for playlist in playlists:
-        device = PLAYLISTS_TO_SYNC[playlist["Name"]][0]
-        playlistID = playlist["PlaylistID"]
-        artistDir = os.path.join(BASE_DIR, device, "MUSIC")
+def add_extra_track_data(playlists):
+    all_tracks = list()
 
-        for track in getTracksByPlaylist(playlist, False):
-            if stopEvent.is_set():
-                return
-            trackID = track["TrackID"]
-            if trackID in trackIDsToTracks:
-                if track.isSingleton or not trackIDsToTracks[trackID].isSingleton:
+    p_names_to_sync = sorted([k for k in playlists.keys() if k in PLAYLISTS_TO_SYNC],
+        key=lambda x: (config.DeviceOrder.index(PLAYLISTS_TO_SYNC[x][0]), x))
+    for p_name in p_names_to_sync:
+        p_tracks = playlists[p_name]
+        logging.debug('Found playlist %s, containing %d tracks', p_name, len(p_tracks))
+        for track in p_tracks:
+            if not hasattr(track, 'device'):
+                device, _, _ = PLAYLISTS_TO_SYNC[p_name]
+                track.device = device
+                all_tracks.append(track)
+
+    if config.GroupSingletons:
+        # Singleton detection
+        # An artist (along with all tracks associated with that artist) is
+        # considered a 'singleton' on a particular device if it has fewer than 5 tracks
+        # and no full albums on that device
+
+        device_artists = collections.defaultdict(list)
+
+        for device in config.DeviceOrder:
+            for track in all_tracks:
+                if track.device != device:
                     continue
-            trackIDsToTracks[trackID] = track
+                device_artists[track.album_artist].append(track)
 
-            track.extraData["PlaylistID"] = playlistID
-            device = os.path.basename(os.path.dirname(artistDir))
+        for artist, tracks in sorted(device_artists.items()):
+            album_disc_track_counts = dict()
+            album_totals = collections.defaultdict(int)
+            track_count = len(tracks)
 
-            ext = os.path.splitext(track["Location"])[1]
-            track.extraData["Dest"] = track.getDestName(artistDir, ext=ext)
-            track.extraData["Device"] = device
-            # print track["Title"], device
-            # tracks.append(track)
+            for track in tracks:
+                key = (track.album, track.dn)
+                if track.tc and track.album and key not in album_disc_track_counts:
+                    album_disc_track_counts[key] = track.tc
+                album_totals[key] += 1
 
-    return trackIDsToTracks
+            if track_count < 5 and all([tc > album_totals[key] for key, tc in
+                                        album_disc_track_counts.items()]):
+                for track in tracks:
+                    track.singleton = True
+                continue
 
 #------------------------------------------------------------------------------
 # Playlist syncing
 #------------------------------------------------------------------------------
 
-def genM3UPlaylist(playlist, baseDir, groupArtists, tracks):
+def genM3UPlaylist(p_name, p_tracks, base_dir, group_artists):
     lines = ["#EXTM3U"]
-    callBaseDir = callable(baseDir)
-    for track in tracks:
-        if callBaseDir:
-            bd = baseDir(track)
+    call_base_dir = callable(base_dir)
+    for track in p_tracks:
+        if call_base_dir:
+            bd = base_dir(track)
         else:
-            bd = baseDir
-        lines.append("#EXTINF:%d,%s - %s" % (track["Duration"]/1000, track["Artist"], track["Title"]))
-        lines.append(track.getDestName(bd, ga=groupArtists, asUnicode=True))
+            bd = base_dir
+        lines.append("#EXTINF:%d,%s - %s" % (track.length/1000, track.artist, track.title))
+        lines.append(track.calculate_fname(bd, group_artists=group_artists))
     return "%s\n" % '\n'.join(lines)
 
-def genM3U8Playlist(playlist, baseDir, groupArtists, tracks):
+def genM3U8Playlist(p_name, p_tracks, base_dir, group_artists):
     lines = ["#EXTM3U"]
-    callBaseDir = callable(baseDir)
-    for track in tracks:
-        if callBaseDir:
-            bd = baseDir(track)
+    call_base_dir = callable(base_dir)
+    for track in p_tracks:
+        if call_base_dir:
+            bd = base_dir(track)
         else:
-            bd = baseDir
-        lines.append(track.getDestName(bd, ga=groupArtists, asUnicode=True).replace('/', '\\'))
+            bd = base_dir
+        lines.append(track.calculate_fname(bd, group_artists=group_artists)
+                    .replace('/', '\\'))
     return "%s\n" % '\n'.join(lines)
 
-def genXSPFPlaylist(playlist, baseDir, groupArtists, tracks):
-    return SyncPlaylist.exportAsXML(playlist["Name"], tracks, baseDir, groupArtists)
+def genQLPlaylist(p_name, p_tracks, base_dir, group_artists):
+    lines = []
+    call_base_dir = callable(base_dir)
+    for track in p_tracks:
+        if call_base_dir:
+            bd = base_dir(track)
+        else:
+            bd = base_dir
+        lines.append(track.calculate_fname(bd, group_artists=group_artists))
+    return "%s\n" % '\n'.join(lines)
 
-playlist_gens_by_ext = {".m3u": genM3UPlaylist,
+def genXSPFPlaylist(p_name, p_tracks, base_dir, group_artists):
+    app_data = list()
+    track_str_list = list()
+    call_base_dir = callable(base_dir)
+    for idx, track in enumerate(p_tracks):
+        if call_base_dir:
+            bd = base_dir(track)
+        else:
+            bd = base_dir
+        loc = track.calculate_fname(bd, group_artists=group_artists)
+        xmlLoc = pathname2xml(loc)
+        track_strs = ["\t\t<track>"]
+        track_str_dict = [("location", xmlLoc),
+                        ("title", excape_xml_chars(track.title)),
+                        ("creator", excape_xml_chars(track.artist)),
+                        ("album", excape_xml_chars(track.album)),
+                        ("trackNum", "%d" % track.tn),
+                       ]
+        track_strs.extend(["\t<%s>%s</%s>" % (k, v, k) for k, v in track_str_dict])
+        track_strs.append("</track>")
+
+        track_str_list.append('\n\t\t'.join(track_strs))
+        app_data.append('\t\t\t<vlc:item tid="%d"/>' % idx)
+
+    fmt_dict = {"Name": p_name,
+                "TrackList": '\n'.join(track_str_list),
+                "AppData": '\n'.join(app_data)}
+    fmt_str = """<?xml version="1.0" encoding="UTF-8"?>
+<playlist xmlns="http://xspf.org/ns/0/" xmlns:vlc="http://www.videolan.org/vlc/playlist/ns/0/" version="1">
+\t<title>%(Name)s</title>
+\t<trackList>
+%(TrackList)s
+\t</trackList>
+\t<extension application="http://www.videolan.org/vlc/playlist/0">
+%(AppData)s
+\t</extension>
+</playlist>
+"""
+    return fmt_str % fmt_dict
+
+playlist_gens_by_ext = {'': genQLPlaylist,
+                        ".m3u": genM3UPlaylist,
                         ".m3u8": genM3U8Playlist,
                         ".xspf": genXSPFPlaylist}
 
-def playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
-                   sortOrder, trackIDsToTracks):
-    # Get tracks for this playlist
-    if playlist["Smart"]:
-        pl = "Smart"
-        vo = ''
-    else:
-        pl = ''
-        vo = ", cpe.ViewOrder as ViewOrder"
-    rows = db.sql("""SELECT ct.TrackID AS TrackID%s
-FROM CoreTracks ct
-JOIN Core%sPlaylistEntries cpe ON ct.TrackID = cpe.TrackID
-WHERE cpe.%sPlaylistID = ?""" % (vo, pl, pl), playlist["PlaylistID"])
-    if not rows:
-        return ''
-
-    playlistTracks = list()
-    for r in rows:
-        t = trackIDsToTracks[r["TrackID"]]
-        if "ViewOrder" in r:
-            t.extraData["ViewOrder"] = r["ViewOrder"]
-        playlistTracks.append(t)
-
-    playlistTracks.sort(key=operator.itemgetter(*sortOrder))
-
-    return playlist_gens_by_ext[pExt](playlist, baseDir, groupArtists, playlistTracks)
-
-def syncPlaylists(playlists, trackIDsToTracks, dryrun):
+def sync_playlists(dryrun):
     # Mapping from destination playlist filenames to contents
-    playlistTexts = dict()
+    p_texts = dict()
     # Set of parent directories of the playlists
-    playlistDirs = list()
-    for playlist in playlists:
-        pDevice, protocols = PLAYLISTS_TO_SYNC[playlist["Name"]]
-        for protocol in protocols:
-            protocolName, pExt, baseDir, groupArtists, sortOrder = protocol
+    p_dirs = list()
 
-            pDir = os.path.join(BASE_DIR, BASE_DEVICE, "Playlists%s" % protocolName)
-            if pDir not in playlistDirs:
-                playlistDirs.append(pDir)
-            pDest = os.path.join(pDir, "%s%s" % (playlist["Name"], pExt))
+    playlists = config.DefaultDb.load_playlists()
+    add_extra_track_data(playlists)
+    for p_name, p_tracks in sorted(playlists.items()):
+        if not p_tracks:
+            continue
+        if p_name in PLAYLISTS_TO_SYNC:
+            _, sort_order, protocols = PLAYLISTS_TO_SYNC[p_name]
+            for protocol in protocols:
+                protocol_name, p_ext, base_dir, group_artists = protocol
 
-            pText = playlistToText(playlist, protocolName, pExt, baseDir, groupArtists,
-                                          sortOrder, trackIDsToTracks)
+                p_dir = os.path.join(BASE_DIR, BASE_DEVICE, "Playlists%s" % protocol_name)
+                if p_dir not in p_dirs:
+                    p_dirs.append(p_dir)
+                p_dest = os.path.join(p_dir, "%s%s" % (p_name, p_ext))
 
-            if pText:
-                pDest = pDest.encode(config.UnicodeEncoding)
-                playlistTexts[pDest] = pText
+                if sort_order:
+                    p_tracks.sort(key=sort_key(*sort_order))
+                p_text = playlist_gens_by_ext[p_ext](p_name, p_tracks,
+                                                     base_dir, group_artists)
+
+                if p_text:
+                    p_texts[p_dest] = p_text
 
     # Get list of playlists already on drive
-    curPlaylists = list()
-    for playlistDir in playlistDirs:
-        if not os.path.exists(pDir):
-            os.makedirs(pDir)
-        curPlaylistFiles = os.listdir(playlistDir)
-        if ".m3u" in curPlaylistFiles:
-            curPlaylistFiles.remove(".m3u")
-        curPlaylists.extend([os.path.join(playlistDir, pName) for pName in curPlaylistFiles])
+    cur_playlists = list()
+    for p_dir in p_dirs:
+        if os.path.exists(p_dir):
+            cur_pfiles = os.listdir(p_dir)
+        else:
+            cur_pfiles = []
+            logging.info('Creating directory\t%s' % p_dir)
 
-    toSync, common, toRemove = Util.compare_filesets(playlistTexts.keys(), curPlaylists, sort=True)
+        if ".m3u" in cur_pfiles:
+            cur_pfiles.remove(".m3u")
+        cur_playlists.extend([os.path.join(p_dir, name) for name in cur_pfiles])
+
+    to_sync, common, to_remove = compare_filesets(list(p_texts.keys()),
+                                                cur_playlists, sort=True)
 
     # Playlists to add
-    toSyncTexts = list()
-    for pDest in toSync:
-        text = playlistTexts[pDest]
-        toSyncTexts.append(text)
-        log.info("Syncing playlist\t%s" % pDest)
+    to_sync_texts = list()
+    for p_dest in to_sync:
+        text = p_texts[p_dest]
+        to_sync_texts.append(text)
+        logging.info("Creating playlist\t%s" % p_dest)
 
     # Playlists to update
-    for pDest in common:
-        text = playlistTexts[pDest]
-        if isinstance(text, unicode):
-            text = text.encode(config.UnicodeEncoding)
-        existing = open(pDest, 'rU').read()
+    for p_dest in common:
+        text = p_texts[p_dest]
+        existing = open(p_dest, 'r').read()
         if text != existing:
-            oldLines = existing.split('\n')
-            newLines = text.split('\n')
+            logging.info("Updating playlist\t%s" % p_dest)
 
-            log.info("Updating playlist\t%s" % pDest)
-
-            if "Transient" in pDest:
-                isJunk = lambda s: s.strip() == ''
-                matcher = difflib.SequenceMatcher(isjunk=isJunk, a=oldLines, b=newLines)
-                log.debug("Playlists are %.1f%% similar" % (matcher.ratio() * 100))
-
-                d = difflib.Differ(isJunk)
-                blockStarted = True
-                for line in d.compare(oldLines, newLines):
-                    if line.startswith(' '):
-                        continue
-                    l = line.strip()
-                    if line.startswith('-'):
-                        if not blockStarted:
-                            blockStarted = True
-                        log.debug(l)
-                    else:
-                        blockStarted = False
-                        log.debug(l)
-
-
-            toSync.append(pDest)
-            toSyncTexts.append(text)
+            to_sync.append(p_dest)
+            to_sync_texts.append(text)
         elif showSkipped:
-            log.info("Skipping playlist\t%s" % pDest)
+            logging.info("Skipping playlist\t%s" % p_dest)
 
     # Playlists to remove
-    for pDest in toRemove:
-        log.info("Deleting playlist\t!%s!" % pDest)
+    for p_dest in to_remove:
+        logging.info("Deleting playlist\t!%s!" % p_dest)
 
     # Execute changes
     if not dryrun:
-        for pDest, pText in zip(toSync, toSyncTexts):
-            with open(pDest, 'w') as f:
-                if isinstance(pText, unicode):
-                    pText = pText.encode(config.UnicodeEncoding)
-                f.write(pText)
+        for p_dest in to_sync:
+            p_dir = os.path.dirname(p_dest)
+            if not os.path.exists(p_dir):
+                os.makedirs(p_dir)
 
-        for pDest in toRemove:
-            os.remove(pDest)
+            p_text = p_texts[p_dest]
+            with open(p_dest, 'w') as f:
+                f.write(p_text)
+
+        for p_dest in to_remove:
+            os.remove(p_dest)
 
 # Syncs the specified track IDs to the device.
 def sync(allTracks, bitrate, dryrun=False, size=False):
@@ -637,10 +562,6 @@ def main():
                     "portable music player. (Specify them in config/user.py)")
     parser.add_argument('-t', "--test", action="store_true",
                         help="Only preview changes, do not actually make them.")
-    parser.add_argument('-b', dest="bitrate", default=None, type=int,
-            help="Specify the bit rate to encode files to. Any files with a higher "
-                "bit rate will be converted down to save space. If not specified, does not "
-                "convert files; copies them as-is.")
     parser.add_argument("--size", action="store_true",
                 help="Calculate the total data size (in bytes) added or removed")
     parser.add_argument("--show-skipped", action="store_true",
@@ -663,28 +584,14 @@ def main():
         debugLevel = logging.ERROR
     else:
         debugLevel = logging.INFO
-    log.setLevel(debugLevel)
+    logging.basicConfig(level=debugLevel, format='%(levelname)s\t%(message)s')
 
     showSkipped = args.show_skipped
 
-    allDevices = os.listdir(BASE_DIR)
-    allDevices.sort(key=lambda d: '' if d == BASE_DEVICE else d)
-
-    # Find the IDs of all the tracks to sync
-    plNames = list()
-    for pName, pInfo in sorted(PLAYLISTS_TO_SYNC.items(),
-                               key=lambda i: config.DeviceOrder.index(i[1][0])):
-        if pInfo[0] in allDevices:
-            plNames.append(pName)
-    playlists = get_playlists(plNames)
-
-    # Populate playlistIDsToTracks
-    trackIDsToTracks = getTrackIDstoTracks(playlists)
-
     # if args.playlistprotocol:
-    syncPlaylists(playlists, trackIDsToTracks, args.test)
+    sync_playlists(args.test)
 
-    sync(trackIDsToTracks.values(), args.bitrate, args.test, args.size)
+    # sync(trackIDsToTracks.values(), args.test, args.size)
     
 if __name__ == '__main__':
     main()

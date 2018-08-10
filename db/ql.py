@@ -125,13 +125,22 @@ class QLDb(MusicDb):
 
     @classmethod
     def load_playlists(cls):
+        locations_to_tracks = dict()
+
+        def _from_file(loc):
+            if loc in locations_to_tracks:
+                return locations_to_tracks[loc]
+            else:
+                track = locations_to_tracks[loc] = cls.from_file(loc)
+                return track
+
         playlists = dict()
         for pl_file in os.listdir(playlists_dir):
             pl_list = list()
             with open(os.path.join(playlists_dir, pl_file), 'r') as fobj:
                 for line in fobj.readlines():
                     line = line.strip()
-                    pl_list.append(cls.from_file(line))
+                    pl_list.append(_from_file(line))
             playlists[pl_file] = pl_list
 
         # Smart playlists
@@ -144,7 +153,7 @@ class QLDb(MusicDb):
                     name = cur_line = fobj.readline().strip()
                     pl_list = list()
                     for line in cls._ql_query(query):
-                        pl_list.append(cls.from_file(line))
+                        pl_list.append(_from_file(line))
                     playlists[name] = pl_list
                     query = fobj.readline().strip()
 

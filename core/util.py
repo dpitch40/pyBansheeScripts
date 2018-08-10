@@ -4,6 +4,8 @@ import os
 import os.path
 import glob
 
+from db import db_glue
+
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
 
@@ -95,9 +97,17 @@ def make_numcount_descriptors(numname, countname, fieldname, unpack_list=False):
 
     return num_descriptor, count_descriptor, numcount_descriptor
 
-def sort_key(track):
-    return (track.album_artist if track.album_artist else track.artist, track.album,
-            track.dn, track.tn, getattr(track, 'location', None))
+sort_key_defaults = {'album_artist': '',
+                     'artist': '',
+                     'album': '',
+                     'dn': 0,
+                     'tn': 0}
+def sort_key(*args):
+    if args == []:
+        args = ['album_artist', 'artist', 'album', 'dn', 'tn']
+    def _inner(track, a=args):
+        return tuple([getattr(track, arg) or sort_key_defaults[arg] for arg in a])
+    return _inner
 
 def generate_disc_lens(metadatas):
     # Make mapping from disc number to number of tracks on the disc
@@ -145,3 +155,46 @@ def filter_path_elements(elements):
     # Remove forward slashes in the path elements
     elements = [element.replace('/', '_') for element in elements]
     return filter_fname(os.path.join(*elements))
+
+def excape_xml_chars(s):
+    s = s.replace('&', "&amp;")
+    s = s.replace('<', "&lt;")
+    s = s.replace('>', "&gt;")
+    for c in xmlEscapedChars:
+        s = s.replace(c, "&#%d;" % ord(c))
+    return s
+
+# Similar to db_glue.pathname2sql, but converts a pathname for a VLC playlist
+def pathname2xml(path):
+    base = db_glue.pathname2sql(path)
+
+    decode_chars = ';'
+
+    base = excape_xml_chars(base)
+    for c in decode_chars:
+        base = base.replace("%%%02X" % ord(c), c)
+
+    return base
+
+# Takes the intersection of two lists of filenames: returns the files exclusive to the first,
+# the common names, and the names exclusive to the second.
+def compare_filesets(filelist1, filelist2, sort=False):
+    #Turn all to lowercase and remove periods os.path.exists doesn't care about
+    #these
+    def demote(s):
+        return s.lower().replace('.', '')
+
+    return boolean_diff(filelist1, filelist2, demote, sort)
+
+def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
+    translated1 = dict(zip(map(transform, l1), l1))
+    translated2 = dict(zip(map(transform, l2), l2))
+    set1 = set(translated1.keys())
+    set2 = set(translated2.keys())
+    on1not2 = [translated1[f] for f in set1 - set2]
+    on2not1 = [translated2[f] for f in set2 - set1]
+    common = [translated1[f] for f in set1 & set2]
+    if sort:
+        return sorted(on1not2), sorted(common), sorted(on2not1)
+    else:
+        return on1not2, common, on2not1

@@ -65,7 +65,7 @@ def match_metadata_to_files(metadatas, fnames, use_db=False):
         tracks = [open_db(fname) for fname in fnames]
     else:
         tracks = [open_music_file(fname) for fname in fnames]
-    tracks.sort(key=sort_key)
+    tracks.sort(key=sort_key())
 
     track_mapping = _create_track_mapping(tracks)
 

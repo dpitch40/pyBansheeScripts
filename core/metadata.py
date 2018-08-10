@@ -69,14 +69,15 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 setattr(inst, k, v)
         return inst
 
-    def calculate_fname(self, base_dir=config.MusicDir, nested=True, ext=None, singleton=False,
+    def calculate_fname(self, base_dir=config.MusicDir, nested=True, ext=None,
                         group_artists=None):
         if ext is None:
             if getattr(self, 'location', None) is not None:
                 ext = os.path.splitext(self.location)[1]
             else:
                 ext = config.DefaultEncodeExt
-        group_artists = group_artists or config.GroupArtists
+        if group_artists is None:
+            group_artists = config.GroupArtists
 
         title = self.title or 'Unknown Song'
         artist = self.album_artist or self.artist or 'Unknown Artist'
@@ -84,16 +85,16 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
         tn = ''
         if config.NumberTracks:
-            tn = self.tn
-            if tn:
+            tn_num = self.tn
+            if tn_num not in (0, None):
                 dn = self.dn
                 if dn:
-                    tn = "%d-%02d " % (dn, tn)
+                    tn = "%d-%02d " % (dn, tn_num)
                 else:
-                    tn = "%02d " % tn
+                    tn = "%02d " % tn_num
 
-        singleton = singleton and config.GroupSingletons
-        if config.GroupArtists and not singleton:
+        singleton = getattr(self, 'singleton', False) and config.GroupSingletons
+        if group_artists and not singleton:
             sort_artist = artist
             for word in config.IgnoreWords:
                 if sort_artist.startswith(word + ' '):

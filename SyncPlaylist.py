@@ -70,59 +70,6 @@ def SyncPlaylist(trackListing, destDir, flat, delete, test):
     else:
         print "\n\nSyncing %d" % len(toSync)
 
-def exportAsXML(pName, tracks, baseDir, groupArtists):
-    appData = list()
-    trackList = list()
-    callBaseDir = callable(baseDir)
-    for idx, track in enumerate(tracks):
-        if callBaseDir:
-            bd = baseDir(track)
-        else:
-            bd = baseDir
-        loc = db_glue.sql2pathname(str(track['Uri']))
-        loc = track.getDestName(bd, ga=groupArtists)
-        xmlLoc = Util.pathname2xml(loc)
-        trackStrs = ["\t\t<track>"]
-        trackStrDict = [("location", xmlLoc),
-                        ("title", Util.escapeXMLChars(track["Title"])),
-                        ("creator", Util.escapeXMLChars(track["Artist"])),
-                        ("album", Util.escapeXMLChars(track["Album"])),
-                        ("trackNum", "%d" % track["TrackNumber"]),
-                        # ("duration", "%d" % track["Duration"])
-                       ]
-        trackStrs.extend(["\t<%s>%s</%s>" % (k, v, k) for k, v in trackStrDict])
-        trackStrs.extend([
-            # '\t<extension application="http://www.videolan.org/vlc/playlist/0">',
-            # "\t\t<vlc:id>%d</vlc:id>" % idx,
-            # "\t</extension>",
-            "</track>"])
-        trackStr = '\n\t\t'.join(trackStrs)
-        trackList.append(trackStr)
-
-        appData.append('\t\t\t<vlc:item tid="%d"/>' % idx)
-        
-    fmtDict = {"Name": pName,
-               "TrackList": '\n'.join(trackList),
-               "AppData": '\n'.join(appData)}
-    fmtStr = """<?xml version="1.0" encoding="UTF-8"?>
-<playlist xmlns="http://xspf.org/ns/0/" xmlns:vlc="http://www.videolan.org/vlc/playlist/ns/0/" version="1">
-\t<title>%(Name)s</title>
-\t<trackList>
-%(TrackList)s
-\t</trackList>
-\t<extension application="http://www.videolan.org/vlc/playlist/0">
-%(AppData)s
-\t</extension>
-</playlist>
-"""
-    formatted = fmtStr % fmtDict
-
-    # if test:
-    #     print formatted
-    # else:
-    #     with open(dest, 'w') as f:
-    #         f.write(formatted.encode(unicodeEncoding))
-    return formatted.encode(Config.UnicodeEncoding)
 
 def main():
     parser = argparse.ArgumentParser(description="Sync the contents of a playlist to a "
@@ -169,9 +116,6 @@ ORDER BY ca.Name, cl.Title, ct.TrackNumber""" % ID)
         t["Duration"] = trackDict["Duration"]
         tracks.append(t)
 
-    # if args.xml:
-        # exportAsXML(args.playlist, tracks, args.destdir, args.test, args.unicodeencoding)
-    # else:
     SyncPlaylist(tracks, args.destdir, args.flat, args.delete, args.test)
 
 if __name__ == '__main__':

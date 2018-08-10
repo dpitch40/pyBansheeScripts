@@ -19,10 +19,10 @@ QLSongsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'songs'))
 
 # Playlists to sync - override to suit your tastes
 
-# Mapping from playlist names to (Device name, protocols, sort order) tuples
+# Mapping from playlist names to (Device name, sort order, protocols) tuples
 PlaylistsToSync = {
-  "Playlist_Name_In_Banshee": ("ROOT", ('', ".m3u8", "/path/to/music"),
-                               ["AlbumArtist", "Album", "Disc", "TrackNumber"]),
+  "Playlist_Name_In_Banshee": ("ROOT", ['album_artist', 'album', 'dn', 'tn'],
+                                ('', ".m3u8", "/path/to/music", False)),
 }
 # Device order in which to load playlists--tracks existing on multiple playlists across
 # multiple devices will be synced to the device listed first in this list
