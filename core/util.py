@@ -147,6 +147,9 @@ def filter_fname(f):
 
     return os.path.join(dir_name, fname)
 
+def escape_fname(f):
+    return "'%s'" % f.replace("'", "'\\''")
+
 def filter_path_elements(elements):
     """Wrapper function for filter_fname that also handles the artist/album/song title
        containing forward slashes

@@ -110,7 +110,7 @@ class QLDb(MusicDb):
 
     @classmethod
     def load_all(cls):
-        return qls.songs
+        return [cls(song) for song in qls.songs]
 
     @classmethod
     def _ql_query(cls, query):
@@ -121,7 +121,7 @@ class QLDb(MusicDb):
         except subprocess.CalledProcessError as ex:
             raise SystemExit
         returned_lines = sp.stdout.strip()
-        return returned_lines.split('\n')
+        return sorted(returned_lines.split('\n'))
 
     @classmethod
     def load_playlists(cls):

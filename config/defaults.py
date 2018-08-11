@@ -37,11 +37,15 @@ NumberTracks = True
 # Group artist folders into parent folders by first letter of their name, e.g. "/Agalloch/" ->
 # "/A/Agalloch/"
 GroupArtists = False
+# Group artists when syncing to a portable media player
+GroupArtistsMedia = True
 # List of words to ignore at the beginning of artist names when grouping artists
 IgnoreWords = ['The']
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
 GroupSingletons = True
+# Re-sync music files to the player if the size does not match the file on the disc
+CheckSizes = True
 # Timestamp format for display
 TsFmt = "%Y-%m-%d %H:%M:%S"
 # album_artist defaults to artist if not specified

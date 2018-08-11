@@ -8,9 +8,11 @@ import datetime
 import logging
 import enum
 import collections
+from queue import Queue, Empty
 
 import config
-from core.util import compare_filesets, excape_xml_chars, pathname2xml, sort_key
+from core.util import compare_filesets, excape_xml_chars, pathname2xml, sort_key, \
+        escape_fname
 
 global showSkipped
 
@@ -18,254 +20,198 @@ class Action(enum.Enum):
     SYNC = 0
     DELETE = 1
     SKIP = 2
-    ENCODE = 3
 
 lame_input_formats = ('.mp3', '.wav')
 
-stopEvent = threading.Event()
+stop_event = threading.Event()
 
 PLAYLISTS_TO_SYNC = config.PlaylistsToSync
 BASE_DIR = config.MediaDir
 BASE_DEVICE = config.BaseDevice
+
+loc_sizes = dict()
+def getsize(f):
+    if f in loc_sizes:
+        return loc_sizes[f]
+    else:
+        size = loc_sizes[f] = os.path.getsize(f)
+        return size
 
 #------------------------------------------------------------------------------
 # CHECKER THREAD
 #------------------------------------------------------------------------------
 
 # Threaded function that determines the actions to take with the tracks to sync
-def get_changes(allTracks, changes, bitrate):
+def get_changes(tracks, changes, synchronous):
     #Populates changes (a Queue) with a series of 4-tuples:
-    #trackDict, filename, action, description string
+    #track, dest, action, description string
+    if synchronous:
+        changes = list()
+        put = changes.append
+    else:
+        put = changes.put
 
-    sortKeys = ["AlbumArtist", "Album", "Disc", "TrackNumber"]
-    tracksToSync = sorted(allTracks, key=operator.itemgetter(*sortKeys))
-    dests = [t.extraData["Dest"] for t in tracksToSync]
+    tracks.sort(key=sort_key())
+    dests = [t.calculate_fname(os.path.join(BASE_DIR, t.device, 'MUSIC'),
+                                group_artists=config.GroupArtistsMedia)
+                    for t in tracks]
 
     # Get list of files currently on player
-    filesOnPlayer = list()
+    on_player = list()
     for device in os.listdir(BASE_DIR):# dirsToPlaylistIDs.keys():
         artistDir = os.path.join(BASE_DIR, device, "MUSIC")
         for dirpath, dirnames, filenames in os.walk(artistDir):
             for f in filenames:
-                filesOnPlayer.append(os.path.join(dirpath, f))
+                on_player.append(os.path.join(dirpath, f))
     
     # Handle deletions first
     # Take the set difference of the two sets of filenames
-    # with open("FNames.txt", 'w') as f:
-    #     f.write("Dests:\n\n%s\n\n" % '\n'.join(sorted(["%s\t%s" % (d, type(d)) for d in dests])))
-    #     f.write("Existing:\n\n%s" % '\n'.join(sorted(["%s\t%s" % (d, type(d)) for d in filesOnPlayer])))
-    tosyncnew, common, filestoremove = Util.compare_filesets(dests, filesOnPlayer)
+    tosyncnew, common, filestoremove = compare_filesets(dests, on_player)
+    logging.debug('%d to sync, %d common, %d to remove' %
+        (len(tosyncnew), len(common), len(filestoremove)))
+    to_sync_set = set(tosyncnew)
 
-    for fName in filestoremove:
-        if stopEvent.is_set():
+    for fname in filestoremove:
+        if stop_event.is_set():
             return
-        changes.put((None, fName, DELETE, None))
+        put((None, fname, Action.DELETE, None))
 
-    for track, dest in zip(tracksToSync, dests):
-        if stopEvent.is_set():
+    for track, dest in zip(tracks, dests):
+        if stop_event.is_set():
             return
-        loc = track["Location"]
-        if not os.path.exists(loc):
-            continue
-        action, reason = SKIP, None
+        loc = track.location
+
+        action, reason = Action.SKIP, None
         
-        sourceBr = track['BitRate']
-        # Check if we need to reencode the track down to a lower bitrate
-        encodeNeeded = bitrate is not None and bitrate + 5 < sourceBr
         base, ext = os.path.splitext(dest)
         
-        if os.path.exists(dest):
-            onDiskTime = os.path.getmtime(loc)
-            onPlayerTime = os.path.getmtime(dest)
-            if onDiskTime <= onPlayerTime:
-                # File on player has been modified more recently
-                if encodeNeeded and ext in lame_input_formats:
-                    #Find destination bitrate
-                    dext = os.path.splitext(dest)[1].lower()
-                    if dext == '.wav':
-                        destBr = 1411
-                    elif dext == '.mp3':
-                        destBr = MP3(dest, ID3=EasyID3).info.bitrate/1000
-                    else:
-                        assert False, "I forgot to cover filetype for %s." % dest
+        if dest not in to_sync_set:
+            on_disk_time = os.path.getmtime(loc)
+            on_player_time = os.path.getmtime(dest)
+            if on_disk_time - 5 > on_player_time: # Subtract 5 due to fluctuations
+                on_disk_stamp = datetime.datetime.fromtimestamp(on_disk_time)
+                on_player_stamp = datetime.datetime.fromtimestamp(on_player_time)
 
-                    if abs(bitrate - destBr) <= 5:
-                        # destBr is already below the target bit rate, we're good
-                        action, reason = SKIP, "Dest bitrate OK"
-                    elif destBr < bitrate - 5:
-                        action, reason = ENCODE, "Dest bitrate too low"
-                    else:
-                        # The destination bitrate is too high, needs to be encoded down
-                        action, reason = ENCODE, "Dest bitrate too high"
-                else: # No encode needed
-                    sizeDiffPct = abs((os.path.getsize(dest) - track["FileSize"]) /
-                            float(track["FileSize"]))
-                    if sizeDiffPct < 0.05: # File sizes within 5% of each other
-                        action, reason = SKIP, "File sizes match"
-                    elif ext not in lame_input_formats:
-                        action, reason = SYNC, "Ext not supported by LAME"
-                    else:
-                        action, reason = SYNC, "File sizes don't match: %d != %d" % \
-                            (os.path.getsize(dest), track["FileSize"])
-            elif onDiskTime - 5 > onPlayerTime: # Subtract 5 due to fluctuations
-                onDiskStamp = datetime.datetime.fromtimestamp(onDiskTime)
-                onPlayerStamp = datetime.datetime.fromtimestamp(onPlayerTime)
-                daysNewer = (onDiskStamp - onPlayerStamp).days
-                onDiskS = onDiskStamp.strftime(config.TsFmt)
-                onPlayerS = onPlayerStamp.strftime(config.TsFmt)
+                days = (on_disk_stamp - on_player_stamp).days
                 # File on disk has been modified more recently
-                if encodeNeeded:
-                    # action, reason = ENCODE, "File has been modified; %s > %s" % (onDiskS, onPlayerS)
-                    action, reason = ENCODE, "File has been modified; %d days newer" % daysNewer
-                else:
-                    # action, reason = SYNC, "File has been modified; %s > %s" % (onDiskS, onPlayerS)
-                    action, reason = SYNC, "File has been modified; %d days newer" % daysNewer
-            else:
-                action, reason = SKIP, "File not changed long enough ago"
+                action, reason = Action.SYNC, "File has been modified; %d days newer" % days
+            elif config.CheckSizes:
+                loc_size = getsize(loc)
+                dest_size = getsize(dest)
+                if loc_size != dest_size:
+                    action, reason = Action.SYNC, 'Sizes do not match: %d != %d' % (loc_size, dest_size)
         else: # File does not exist on player
-            if bitrate is not None:
-                if ext not in lame_input_formats:
-                    action, reason = SYNC, "Ext not supported by LAME"
-                elif encodeNeeded:
-                    action, reason = ENCODE, "Does not exist on player"
-                else:
-                    action, reason = SYNC, "Does not exist on player"
-            else:
-                action, reason = SYNC, "Does not exist on player"
+            action, reason = Action.SYNC, "Does not exist on player"
         # print track["Location"], dest, action, reason
-        changes.put((track, dest, action, reason))
+        put((track, dest, action, reason))
     # Sentinel
-    changes.put((None, None, None, None))
+    put((None, None, None, None))
+
+    if synchronous:
+        return changes
 
 #------------------------------------------------------------------------------
 # SYNCER THREAD
 #------------------------------------------------------------------------------
 
-def track_sync(changes, dryrun, bitrate, size):
+def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
     #Sync the tracks
-    progress = 0
     synced = 0
-    encoded = 0
     deleted = 0
     skipped = 0
 
-    dirSizes = dict()
-    createdDirs = set()
+    dir_sizes = dict()
+    created_dirs = set()
 
-    sizeDelta = 0
+    size_delta = 0
+
+    if synchronous:
+        itr = changes
+    else:
+        class Itr(object):
+            def __init__(self, q):
+                self.q = q
+
+            def __iter__(self):
+                while True:
+                    try:
+                        track, dest, action, reason = self.q.get(True, 5)
+                    except Empty:
+                        break
+                    if action is None:
+                        break
+
+                    yield track, dest, action, reason
+
+        itr = Itr(changes)
     
-    while True:
-        try:
-            track, dest, action, reason = changes.get(True, 5)
-        except Queue.Empty:
-            break
-        if action is None:
-            break
+    for track, dest, action, reason in itr:
 
-        progress = synced + encoded + deleted + skipped
-        total = progress + changes.qsize()
-
-        destDir = os.path.dirname(dest)
+        dest_dir = os.path.dirname(dest)
         
-        if action == DELETE:
-            logging.info("Deleting\t!%s!" % dest)
-
-            if destDir in dirSizes:
-                dirSizes[destDir] -= 1
+        if action == Action.DELETE:
+            if shell_cmds:
+                print('rm %s' % escape_fname(dest))
             else:
-                dirSizes[destDir] = len(os.listdir(destDir)) - 1
+                logging.info("Deleting\t!%s!" % dest)
+
+            if dest_dir in dir_sizes:
+                dir_sizes[dest_dir] -= 1
+            else:
+                dir_sizes[dest_dir] = len(os.listdir(dest_dir)) - 1
 
             if size:
-                sizeDelta -= os.path.getsize(dest)
+                size_delta -= getsize(dest)
             if not dryrun:
                 os.remove(dest)
-            if dirSizes[destDir] == 0:
-                logging.info("Removing\t%s" % destDir)
+            if dir_sizes[dest_dir] == 0:
+                if shell_cmds:
+                    print('rm -rf %s' % escape_fname(dest_dir))
+                else:
+                    logging.info("Removing\t%s" % dest_dir)
                 if not dryrun:
                     try:
-                        os.removedirs(destDir)
+                        os.removedirs(dest_dir)
                     except OSError:
-                        logging.error("***ERROR:\tCould not remove %s, it is not empty" % destDir)
+                        logging.error("***ERROR:\tCould not remove %s, it is not empty" % dest_dir)
             deleted += 1
 
-        elif action == SYNC:
-            loc = track["Location"]
+        elif action == Action.SYNC:
+            loc = track.location
             if size:
-                sizeDelta += os.path.getsize(loc)
-            if loc.lower().endswith(".mp3"):
-                audio = MP3(loc, ID3=EasyID3)
-                tagChanges = list()
-                # print audio, '\n'
-                # print track, '\n'
-                for tag, fieldName in [("album", "Album"),
-                                              # ("albumartistsort", "AlbumArtist"),
-                                              ("artist", "Artist"),
-                                              ("genre", "Genre"),
-                                              ("title", "Title")]:
-                    if tag not in audio or audio[tag][0] != track[fieldName]:
-                        tagChanges.append((tag, fieldName))
-                if len(tagChanges) > 0:
-                    logging.debug("Re-tagging\t%s" % 
-                            ', '.join(["%s: %s -> %s" % (tag, audio.get(tag, ['""'])[0], track[fieldName])
-                                    for tag, fieldName in tagChanges]))
+                size_delta += getsize(loc)
 
-            if destDir not in createdDirs and not os.path.exists(destDir):
-                logging.info("Creating\t%s" % destDir)
-                createdDirs.add(destDir)
+            if dest_dir not in created_dirs and not os.path.exists(dest_dir):
+                if shell_cmds:
+                    print('mkdir -p %s' % escape_fname(dest_dir))
+                else:
+                    logging.info("Creating\t%s" % dest_dir)
+                created_dirs.add(dest_dir)
                 if not dryrun:
-                    os.makedirs(destDir)
-            logging.info("Syncing \t%s\t(%s)" % (dest, reason))
-            if not dryrun:
-                if loc.lower().endswith(".mp3"):
-                    if len(tagChanges) > 0:
-                        for tag, fieldName in tagChanges:
-                            audio[tag] = track[fieldName]
-                        audio.save()
-                        
-                shutil.copy(track["Location"], dest)
+                    os.makedirs(dest_dir)
+            if shell_cmds:
+                print('cp %s %s' % (escape_fname(loc), escape_fname(dest)))
+            else:
+                logging.info("Syncing \t%s -> %s\t(%s)" % (loc, dest, reason))
+            if not dryrun:     
+                shutil.copy(track.location, dest)
 
-                if loc.lower().endswith(".mp3"):
-                    # Some changes specifically for the on-device tracks
-                    trackChanges = list()
-                    # if track["TrackNumber"] != 0:
-                    #    trackChanges.append(("tracknumber", str(track["TrackNumber"])))
-                    # if track["Disc"] != 0:
-                    #    trackChanges.append(("discnumber", str(track["Disc"])))
-                    # if track["AlbumArtist"] is not None and track["AlbumArtist"] != track["Artist"]:
-                    #     trackChanges.append(("artist", track["AlbumArtist"]))
-                    if len(trackChanges) > 0:
-                        audio = MP3(dest, ID3=EasyID3)
-                        for tag, value in trackChanges:
-                            audio[tag] = value
-                        # TrackFixup.fixTrack(dest, silent=True)
-                        audio.save()
             synced += 1
-
-        elif action == ENCODE:
-            if destDir not in createdDirs and not os.path.exists(destDir):
-                logging.info("Creating\t%s" % destDir)
-                createdDirs.add(destDir)
-                if not dryrun:
-                    os.makedirs(destDir)
-            logging.info("Re-encoding\t%s to %d kbps\t(%s)" % (dest, bitrate, reason))
-            if not dryrun:
-                track.encode(dest, bitrate)
-            encoded += 1
         else:
-            if showSkipped:
+            if showSkipped and not shell_cmds:
                 logging.info("Skipping\t%s\t(%s)" % (dest, reason))
             skipped += 1
 
-    outStr = '%d synced\t%d encoded\t%d skipped\t %d deleted' % (synced, encoded, skipped, deleted)
+    out_str = '%d synced\t%d skipped\t %d deleted' % (synced, skipped, deleted)
     if size:
-        sizeStr = "%d" % sizeDelta
-        sizeStrMB = "%.2f" % (float(sizeDelta) / (2 ** 20))
-        if sizeDelta > 0:
-            sizeStr = '+' + sizeStr
-            sizeStrMB = '+' + sizeStrMB
-        outStr = "%s\t%s bytes (%s MB)" % (outStr, sizeStr, sizeStrMB)
-    logging.info(outStr)
-    stopEvent.set()
+        size_str = "%d" % size_delta
+        size_str_mb = "%.2f" % (float(size_delta) / (2 ** 20))
+        if size_delta > 0:
+            size_str = '+' + size_str
+            size_str_mb = '+' + size_str_mb
+        out_str = "%s\t%s bytes (%s MB)" % (out_str, size_str, size_str_mb)
+    logging.info(out_str)
+    stop_event.set()
 
 #------------------------------------------------------------------------------
 # BASE THREAD
@@ -381,6 +327,8 @@ def add_extra_track_data(playlists):
                     track.singleton = True
                 continue
 
+    return all_tracks
+
 #------------------------------------------------------------------------------
 # Playlist syncing
 #------------------------------------------------------------------------------
@@ -472,7 +420,7 @@ def sync_playlists(dryrun):
     p_dirs = list()
 
     playlists = config.DefaultDb.load_playlists()
-    add_extra_track_data(playlists)
+    all_tracks = add_extra_track_data(playlists)
     for p_name, p_tracks in sorted(playlists.items()):
         if not p_tracks:
             continue
@@ -547,13 +495,23 @@ def sync_playlists(dryrun):
         for p_dest in to_remove:
             os.remove(p_dest)
 
+    return all_tracks
+
 # Syncs the specified track IDs to the device.
-def sync(allTracks, bitrate, dryrun=False, size=False):
-    changes = Queue.Queue()
-    checker = threading.Thread(target=get_changes, args=(allTracks, changes, bitrate))
-    checker.start()
-    syncer = threading.Thread(target=track_sync, args=(changes, dryrun, bitrate, size))
-    syncer.start()
+def sync(allTracks, dryrun=False, size=False, synchronous=False, shell_cmds=False):
+    if synchronous:
+        changes = get_changes(allTracks, None, synchronous)
+        logging.info('%d tracks found' % len(changes))
+        track_sync(changes, dryrun, size, shell_cmds, synchronous)
+    else:
+        changes = Queue()
+        checker = threading.Thread(target=get_changes, args=(allTracks, changes, synchronous))
+        checker.start()
+        # Wait for the first queue item
+        item = changes.get(block=True, timeout=None)
+        changes.put(item)
+        syncer = threading.Thread(target=track_sync, args=(changes, dryrun, size, shell_cmds, synchronous))
+        syncer.start()
 
 def main():
     global showSkipped
@@ -566,6 +524,10 @@ def main():
                 help="Calculate the total data size (in bytes) added or removed")
     parser.add_argument("--show-skipped", action="store_true",
                 help="Show files that were not synced or updated")
+    parser.add_argument('--synchronous', action='store_true',
+                help='Run the checker and syncer in the same thread')
+    parser.add_argument('--shell-cmds', action='store_true',
+                help='Print the shell commands to perform the track syncing')
 
     parser.add_argument("-q", "--quiet", action="store_true",
             help="Minimize output to the console.")
@@ -577,21 +539,21 @@ def main():
     args = parser.parse_args()
 
     if args.verbose:
-        debugLevel = logging.DEBUG
+        debug_level = logging.DEBUG
     elif args.quiet:
-        debugLevel = logging.WARNING
+        debug_level = logging.WARNING
     elif args.silent:
-        debugLevel = logging.ERROR
+        debug_level = logging.ERROR
     else:
-        debugLevel = logging.INFO
-    logging.basicConfig(level=debugLevel, format='%(levelname)s\t%(message)s')
+        debug_level = logging.INFO
+    logging.basicConfig(level=debug_level, format='%(levelname)s\t%(message)s')
 
     showSkipped = args.show_skipped
 
     # if args.playlistprotocol:
-    sync_playlists(args.test)
+    all_tracks = sync_playlists(args.test)
 
-    # sync(trackIDsToTracks.values(), args.test, args.size)
+    sync(all_tracks, args.test, args.size, args.synchronous, args.shell_cmds)
     
 if __name__ == '__main__':
     main()
