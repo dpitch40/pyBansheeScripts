@@ -14,7 +14,7 @@ from db.db import MusicDb
 from match import match_metadata_to_files
 from mfile.mfile import MusicFile
 from parse import get_track_list
-from track import Track
+from core.track import Track
 
 http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 
