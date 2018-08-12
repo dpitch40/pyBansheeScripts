@@ -3,10 +3,9 @@ import os.path
 from .mp3 import MP3File
 from .ogg import OggFile
 from .flac import FlacFile
+from .m4a import M4AFile
 
-mapping = {'.mp3': MP3File,
-           '.ogg': OggFile,
-           '.flac': FlacFile}
+mapping = dict([(f.ext, f) for f in (MP3File, OggFile, FlacFile, M4AFile)])
 
 def open_music_file(fname):
     _, ext = os.path.splitext(fname)

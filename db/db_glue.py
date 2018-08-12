@@ -7,8 +7,6 @@ import re
 import operator
 import config
 
-from six.moves.urllib.request import url2pathname, pathname2url
-
 defaultLoc = config.BansheeDbLoc
 
 # Characters to escape when converting to SQL-compatible strings
@@ -20,23 +18,6 @@ def new(loc=defaultLoc):
     """Returns a new cursor to the database. (Creates the database if none exists)"""
     db = DB(loc)
     return db
-
-def pathname2sql(path):
-    pathDir, pathBase = os.path.split(path)
-    # Fix filenames with periods at the start
-    m = initialPeriodRe.match(pathBase)
-    if m:
-        numPeriods = len(m.group(1))
-        path = os.path.join(pathDir, "%s%s" % ('_' * numPeriods, pathBase[numPeriods:]))
-    sqlloc = pathname2url(path)
-    # Escape troublesome characters
-    for c in PATHNAME_CHARS:
-          sqlloc = sqlloc.replace("%%%X" % ord(c), c)
-    return "file://" + sqlloc
-
-def sql2pathname(uri):
-    # Just strip the "file://" from the start and run through url2pathname
-    return url2pathname(uri[7:])
 
 class DB:
     """An object representing a cursor to a database."""

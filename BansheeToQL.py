@@ -7,7 +7,7 @@ import operator
 import shutil
 
 import db_glue
-import Util
+from core.util import sql2pathname, boolean_diff
 
 db = db_glue.new()
 ql_dir = os.path.expanduser(os.path.join('~', '.quodlibet'))
@@ -85,10 +85,10 @@ field_mappings = [
 ]
 
 def match_tracks_to_songs(tracks, songs, force):
-    track_locations = [db_glue.sql2pathname(str(track["Uri"])).decode('utf8') for track in tracks]
+    track_locations = [sql2pathname(str(track["Uri"])).decode('utf8') for track in tracks]
     song_locations = [song['~filename'].decode("utf8") for song in songs]
     
-    extra_tracks, common, extra_songs = Util.boolean_diff(track_locations, song_locations, sort=True)
+    extra_tracks, common, extra_songs = boolean_diff(track_locations, song_locations, sort=True)
     
     if extra_tracks:
         print "Unmatched track locations from Banshee:\n%s" % '\n'.join(extra_tracks)
@@ -141,7 +141,7 @@ def sync_playlist(playlist):
     entries = db.sql(playlist_entry_sql % playlist_id)
     contents = []
     for entry in entries:
-        contents.append(db_glue.sql2pathname(str(entry['Uri'])).decode('utf8') + '\n')
+        contents.append(sql2pathname(str(entry['Uri'])).decode('utf8') + '\n')
 
     return dest, ''.join(contents)
 

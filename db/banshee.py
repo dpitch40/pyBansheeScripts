@@ -1,6 +1,6 @@
 from db.db import MusicDb
 from db import db_glue
-from core.util import date_descriptor, make_descriptor_func
+from core.util import date_descriptor, make_descriptor_func, sql2pathname, pathname2sql
 
 db = db_glue.db
 
@@ -128,7 +128,7 @@ class BansheeDb(MusicDb):
     @classmethod
     def from_file(cls, loc):
         try:
-            return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, db_glue.pathname2sql(loc))
+            return cls._from_sql(select_stmt % {'where': " WHERE ct.Uri = ?"}, pathname2sql(loc))
         except ValueError:
             return None
 
@@ -180,7 +180,7 @@ class BansheeDb(MusicDb):
 
     bitrate = make_descriptor_func(lambda x: int(x * 1000))('bitrate')
     length = make_descriptor_func(lambda x: x)('length')
-    location = make_descriptor_func(db_glue.sql2pathname, db_glue.pathname2sql)('Uri')
+    location = make_descriptor_func(sql2pathname, pathname2sql)('Uri')
     date_added = date_descriptor('date_added')
     last_played = date_descriptor('last_played')
     last_skipped = date_descriptor('last_skipped')

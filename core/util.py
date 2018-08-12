@@ -4,7 +4,7 @@ import os
 import os.path
 import glob
 
-from db import db_glue
+from urllib.request import url2pathname, pathname2url
 
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
@@ -167,9 +167,26 @@ def excape_xml_chars(s):
         s = s.replace(c, "&#%d;" % ord(c))
     return s
 
+def pathname2sql(path):
+    pathDir, pathBase = os.path.split(path)
+    # Fix filenames with periods at the start
+    m = initialPeriodRe.match(pathBase)
+    if m:
+        numPeriods = len(m.group(1))
+        path = os.path.join(pathDir, "%s%s" % ('_' * numPeriods, pathBase[numPeriods:]))
+    sqlloc = pathname2url(path)
+    # Escape troublesome characters
+    for c in PATHNAME_CHARS:
+          sqlloc = sqlloc.replace("%%%X" % ord(c), c)
+    return "file://" + sqlloc
+
+def sql2pathname(uri):
+    # Just strip the "file://" from the start and run through url2pathname
+    return url2pathname(uri[7:])
+
 # Similar to db_glue.pathname2sql, but converts a pathname for a VLC playlist
 def pathname2xml(path):
-    base = db_glue.pathname2sql(path)
+    base = pathname2sql(path)
 
     decode_chars = ';'
 
