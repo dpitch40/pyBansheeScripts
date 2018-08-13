@@ -13,7 +13,6 @@ MediaDir =
 BaseDevice = "ROOT"
 # Mappings from device names to slot numbers
 SlotNums = {"ROOT": 1}
-DefaultDb = None
 
 PlaylistsToSync = {}
 """)

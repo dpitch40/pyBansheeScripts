@@ -381,11 +381,11 @@ from match import match_metadata_to_tracks
 
 
 
-def sync_tracks(source_tracks, dest_tracks, test):
+def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
     matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
 
     for source_track, dest_track in matched:
-        if getattr(source_track, 'location') == dest_track.location:
+        if getattr(source_track, 'location', None) == dest_track.location:
             # Both tracks have the same base file--we are copying from the file to the db or vice versa
             source_md = source_track.default_metadata
             if isinstance(source_md, MusicFile):
@@ -402,31 +402,43 @@ def sync_tracks(source_tracks, dest_tracks, test):
 
         track_changes = dict()
         for md, name in dest_mds:
-            md.update(source_md)
+            md.update(source_md, copy_none=copy_none)
             changes = md.changes()
             if changes:
                 track_changes[name] = changes
+
+        print(dest_track.location)
         if track_changes:
-            print(dest_track.location)
             for name, changes in sorted(track_changes.items()):
                 md = getattr(dest_track, name)
                 print('    %s' % name)
-                for k, v in changes:
-                    print('        %s: %s -> %s' % (k, getattr(md, name, None), v))
+                for k, v in changes.items():
+                    print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
+
+        if reloc:
+            new_loc = dest_track.default_metadata.calculate_fname()
+            if new_loc != dest_track.location:
+                print('    Relocating to %s' % new_loc)
+                if dest_track.db:
+                    dest_track.db.location = new_loc
+                    if not test and dest_track.mfile:
+                        dest_track.mfile.move(new_loc)
 
         if not test:
             dest_track.save()
 
-    for track in unmatched_sources:
-        print('%s NOT MATCHED' % track.location)
+    if unmatched_sources:
         print()
+        for track in unmatched_sources:
+            print('%s NOT MATCHED' % getattr(track, 'location', track))
+            print()
 
     print('%d/%d matched' % (len(matched), len(source_tracks)))
 
     if not test:
         DefaultDb().commit()
 
-def copy_metadata(source_tracks, dest_strs, test):
+def copy_metadata(source_tracks, dest_strs, copy_none, reloc, test):
     for dest_str in dest_strs:
         print('---\n%s\n---\n' % dest_str)
         if os.path.splitext(dest_str.lower())[1] in tracklist_exts:
@@ -438,7 +450,7 @@ def copy_metadata(source_tracks, dest_strs, test):
             if dest_type == 'web':
                 raise ValueError('Cannot save tracks to a URL')
 
-            sync_tracks(source_tracks, dest_tracks, test)
+            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test)
 
 def parse_metadata_string(s):
     if url_re.match(s):
@@ -468,12 +480,11 @@ def main():
     progDesc = """Copy music metadata from one source to one or more destinations."""
 
     parser = argparse.ArgumentParser(description=progDesc)
-    # parser.add_argument('-r', "--use-repr", action="store_true",
-    #                     help="When viewing, use repr() to display rather than str().")
-    # parser.add_argument("--noreloc", dest="reloc", action="store_false",
-    #                     help="Disable automatic relocation of files.")
-    # parser.add_argument("--rebase", help="Change a track's source to this location.")
-    # parser.add_argument("--suffix")
+    parser.add_argument("--reloc", action="store_true",
+                        help="Relocate files to standard filenames calculate from metadata.")
+    parser.add_argument("--rebase", action='store_true',
+                        help="Change a track's source to the matching location.")
+    parser.add_argument('-c', '--copy-none', action='store_true')
     parser.add_argument('-t', "--test", action="store_true",
                         help="Only preview changes, do not actually make them.")
     parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
@@ -493,6 +504,8 @@ def main():
 
         print(t.format())
 
+    if args.rebase:
+        raise NotImplementedError
     # fNames, tracks, changes = getTracks(parser, args)
     # if args.rebase:
     #     assert len(tracks) == 1, "Can only rebase 1 track at a time"
@@ -500,7 +513,7 @@ def main():
 
     if len(args.dests) > 0:
         print()
-        copy_metadata(source_tracks, args.dests, args.test)
+        copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc, args.test)
 
 if __name__ == "__main__":
     main()

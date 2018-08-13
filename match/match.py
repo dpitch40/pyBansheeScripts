@@ -85,7 +85,7 @@ def match_metadata_to_tracks(tracks, metadatas):
         else:
             unmatched_metadatas.append(metadata)
 
-    unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(1), matched)]
+    unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(0), matched)]
 
     return matched, unmatched_tracks, unmatched_metadatas
 

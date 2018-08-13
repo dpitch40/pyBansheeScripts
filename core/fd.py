@@ -45,10 +45,8 @@ class FormattingDictLike(abc.ABC):
                 formatted_lines.append(' - '.join(formatted_line))
 
         return (self.sigil * 3) + ' ' + '\n    '.join(formatted_lines)
-
     def __str__(self):
         return '<%s>' % self.__class__.__name__
-
     def __repr__(self):
         return pprint.pformat(self.to_dict())
 

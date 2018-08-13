@@ -14,6 +14,8 @@ BaseDevice = "ROOT"
 BansheeDbLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
 # Quod Libet songs file location
 QLSongsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'songs'))
+# Quod Libet playlist file location
+QLPlaylistsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'playlists'))
 
 
 
@@ -51,7 +53,11 @@ TsFmt = "%Y-%m-%d %H:%M:%S"
 # album_artist defaults to artist if not specified
 AlbumArtistDefault = True
 # Default MusicDb class to use--callable
-DefaultDb = lambda x: None
+def DefaultDb():
+    from db.ql import QLDb
+    return QLDb
+# Directory to check for playlists on a portable player
+PortablePLsDir = 'PlaylistsQL'
 # Default bit rate to encode arbitrary tracks to
 DefaultBitrate = 128
 # Default bit rate to encode CDs to

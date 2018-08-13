@@ -49,6 +49,10 @@ class Metadata(MappingWrapper, FormattingDictLike):
             if v is NOT_FOUND:
                 continue
 
+            # Special case for length--only update length if the new value is based on an actual file
+            if k == 'length' and not hasattr(other, 'location'):
+                continue
+
             if v != getattr(self, k) and (v is not None or copy_none):
                 changes[k] = v
         return changes
