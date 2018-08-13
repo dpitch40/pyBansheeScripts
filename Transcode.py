@@ -42,7 +42,7 @@ def transcode(input_files, oom, bitrate, test):
         output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
     else:
         output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
-    output_metadatas = [t.db or t.mfile or t.other for t in output_tracks]
+    output_metadatas = [t.default_metadata for t in output_tracks]
 
     matched, unmatched_tracks, unmatched_files = match_metadata_to_files(output_metadatas, input_files)
 
@@ -59,7 +59,7 @@ def transcode(input_files, oom, bitrate, test):
             else:
                 input_track = open_music_file(fname)
                 encoded = MusicFile(dest, {'bitrate': bitrate * 1000,
-                                           'fsize': int(input_track.length * bitrate / 8)}
+                                           'fsize': int(input_track.length * bitrate / 8)})
 
             if isinstance(metadata, MusicDb):
                 metadata.update(encoded, False)

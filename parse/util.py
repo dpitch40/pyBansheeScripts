@@ -18,18 +18,6 @@ def parse_time_str(time_str):
     else:
         return None
 
-def convert_str_value(v, convertNumbers=True):
-    if v == '' or v == "None" or v is None:
-        return None
-    elif isinstance(v, str) and convertNumbers and v.isdigit():
-        return int(v)
-    else:
-        m = tuple_re.match(v)
-        if m:
-            return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
-
-    return v
-
 def convert_to_tracks(info_list, **kwargs):
     """Converts a list of (title, length, disc_num) tuples and extra metadata kwargs to a list of
        Metadata objects."""

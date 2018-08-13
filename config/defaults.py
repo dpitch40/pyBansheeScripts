@@ -58,6 +58,8 @@ DefaultBitrate = 128
 DefaultCDBitrate = 256
 # Default file type to encode to (.mp3 or .ogg)
 DefaultEncodeExt = ".ogg"
+# Default source to use when opening track metadata from filenames. Select 'db' or 'mfile'.
+DefaultMetadataSource = 'mfile'
 # Default MP3 quality (0 <= qual <= 9, lower is better)
 MP3Qual = 2
 # Default FLAC encoding compression level (0 <= level <= 8; lower is faster, higher is more compressed)

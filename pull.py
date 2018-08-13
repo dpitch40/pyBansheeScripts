@@ -4,7 +4,7 @@ import os.path
 
 from parse import get_track_list
 from parse.file import write_tracklist
-from parse.util import convert_str_value
+from core.util import convert_str_value
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("Get a track list from an external source.")

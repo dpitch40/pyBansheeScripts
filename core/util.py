@@ -224,3 +224,15 @@ def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
         return sorted(on1not2), sorted(common), sorted(on2not1)
     else:
         return on1not2, common, on2not1
+
+def convert_str_value(v, convertNumbers=True):
+    if v == '' or v == "None" or v is None:
+        return None
+    elif isinstance(v, str) and convertNumbers and v.isdigit():
+        return int(v)
+    else:
+        m = tuple_re.match(v)
+        if m:
+            return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
+
+    return v

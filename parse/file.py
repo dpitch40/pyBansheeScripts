@@ -4,7 +4,8 @@ from io import StringIO
 from collections import defaultdict
 from collections.abc import Iterable
 from core.metadata import Metadata
-from .util import convert_str_value, convert_to_tracks, parse_time_str
+from .util import convert_to_tracks, parse_time_str
+from core.util import convert_str_value
 
 strKeys = {'album_artist', 'album_artist_sort', 'album', 'album_sort', 'artist', 'artist_sort',
            'genre', 'title', 'title_sort'}
