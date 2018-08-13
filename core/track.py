@@ -55,7 +55,7 @@ class Track(FormattingDictLike):
         else:
             return super(Track, self).__getattribute__(key)
 
-    def to_dict(self, combine=False):
+    def to_dict(self, combine=True):
         if combine:
             d = dict([(key, getattr(self, key)) for key in self.all_keys])
         else:
@@ -75,7 +75,7 @@ class Track(FormattingDictLike):
 
         return d
 
-    def _format_dict(self, combine=False):
+    def _format_dict(self, combine=True):
         d = self.to_dict(combine=combine)
         for k, v in d.items():
             if isinstance(v, dict):
@@ -87,7 +87,7 @@ class Track(FormattingDictLike):
     def _format_length(self, value):
         return '%.3f' % (value / 1000)
 
-    def format(self, combine=False):
+    def format(self, combine=True):
         d = self._format_dict(combine=combine)
         for k, v in d.items():
             if v is None:

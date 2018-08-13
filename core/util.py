@@ -7,6 +7,8 @@ import glob
 
 from urllib.request import url2pathname, pathname2url
 
+from mfile import mapping as mfile_mapping
+
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
 
@@ -133,7 +135,7 @@ def get_fnames(dir_):
     if g != [dir_]:
         return sorted(g)
 
-    allowed_exts = {'.mp3', '.ogg', '.flac'}
+    allowed_exts = set(mfile_mapping.keys())
 
     fnames = os.listdir(dir_)
     return sorted([os.path.join(dir_, fname) for fname in fnames if

@@ -1,118 +1,16 @@
-import ParseTables
-from EasyID3Custom import EasyID3Custom as EasyID3
-import db_glue
 import os
 import os.path
 import argparse
-import Util
 import operator
 import re
-import csv
 import itertools
 import collections
-import KeyGen
-import Config
-Config.GroupArtists = False
-import Track
-from Track import TRACKLIST, DB, FILE
-from pprint import pprint
 
-db = db_glue.new(db_glue.defaultLoc)
-Track.db = db
-musicDir = Config.MusicDir
+from core.util import convert_str_value, get_fnames
+from core.track import Track
 
-trackNumRe = re.compile(r"^(?:(\d)\-)?(\d{1,2})(.+)\.(\w{2,4})$")
-
-LENGTH_UPDATE_THRESHOLD_MS = 600
-
-def ExtractKeys(track, index, discLens=None):
-    keys = ['Track#%d' % index]
-    album, artist, title, tn, dn = track["Album"], track["Artist"], track["Title"], \
-                                    track["TrackNumber"], track["Disc"]
-
-    if track["Location"]:
-        keys.append(track["Location"])
-
-        audio = track.audio
-        if audio:
-            if tn is None and "tracknumber" in audio:
-                tn = audio["tracknumber"][0]
-                if '/' in tn:
-                    tn = int(tn.split('/')[0])
-                else:
-                    tn = int(tn)
-            if dn is None and "discnumber" in audio:
-                dn = audio["discnumber"][0]
-                if '/' in dn:
-                    dn = int(dn.split('/')[0])
-                else:
-                    dn = int(dn)
-            if title is None and "title" in audio:
-                title = audio["title"][0]
-            if artist is None and "artist" in audio:
-                artist = audio["artist"][0]
-            if album is None and "album" in audio:
-                album = audio["album"][0]
-
-        d, baseName = os.path.split(track["Location"])
-        d, albumDir = os.path.split(d)
-        artistDir = os.path.basename(d)
-        m = trackNumRe.match(baseName)
-        if m:
-            dnF, tnF, titleF, ext = m.groups()
-            if dnF:
-                dnF = int(dnF)
-            tnF = int(tnF)
-            if not tn:
-                tn = tnF
-            if not dn:
-                dn = dnF
-
-            if not artist:
-                artist = artistDir
-            if not album:
-                album = albumDir
-            if not title:
-                title = titleF
-
-    if tn not in (0, None):
-        keys.append((dn, tn))
-        if dn and discLens is not None:
-            keys.append((None, tn + sum([c for d, c in discLens.items() if d < dn])))
-    if title:
-        keys.append((title, artist, album))
-
-    if track.matchedWithDB:
-        keys.append(track["TrackID"])
-
-    return keys
-
-# Creates mappings from TrackID/(dn, tn)/(title, artist, album) tuples to MP3s
-def CreateTrackMapping(tracks):
-    trackMapping = dict()
-    dupKeys = set()
-
-    # Make mapping from disc number to number of tracks on the disc
-    discLens = collections.defaultdict(int)
-    for track in tracks:
-        dn = track["Disc"]
-        if dn:
-            discLens[dn] += 1
-
-    for i, track in enumerate(tracks):
-        possKeys = ExtractKeys(track, i, discLens)
-        
-        # Ensure each mapping key is unique across all tracks
-        for k in possKeys:
-            if k in dupKeys:
-                continue
-            elif k in trackMapping:
-                del trackMapping[k]
-                dupKeys.add(k)
-            else:
-                trackMapping[k] = track
-
-    return trackMapping
+from parse.file import read_tracklist, tracklist_exts, write_tracklist
+from parse.web import url_re, parse_tracklist_from_url
 
 # Edits tracks
 def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None,
@@ -290,28 +188,6 @@ def Edit(tracks, destFiles, changes, test, matchWithDB, relocate, rebase=None,
         status = "%s (%s overwritten)" % (status, overwritten)
     print status
 
-# Saves a track list to Album.csv
-def Save(tracks, outName="Album.csv"):
-    headersPresent = [False for k in Track.allKeys]
-    for track in tracks:
-        for i, k in enumerate(Track.allKeys):
-            if k in track:
-                headersPresent[i] = True
-    headers = [k for i, k in enumerate(Track.allKeys) if headersPresent[i]]
-    with open(outName, 'w') as f:
-        writer = csv.DictWriter(f, headers, lineterminator='\n')
-        writer.writeheader()
-        for track in tracks:
-            dl = list()
-            for k in headers:
-                v = track[k]
-                if k is not None and isinstance(k, unicode):
-                    k = k.encode(Config.UnicodeEncoding)
-                if v is not None and isinstance(v, unicode):
-                    v = v.encode(Config.UnicodeEncoding)
-                dl.append((k, v))
-            writer.writerow(dict(dl))
-
 # Converts a SQL/track list representation to a mutagen-style EasyMP3 object.
 def TrackToMutagenDict(d):
     audio = dict()
@@ -440,19 +316,6 @@ def View(tracks, useRepr=False):
         else:
             print str(audio)
 
-def addDefaultArguments(parser):
-    parser.add_argument('-t', "--test", action="store_true",
-                        help="Only preview changes, do not actually make them.")
-    parser.add_argument("--help-tags", action="store_true",
-                        help="Display the EasyID3 tags that can be viewed or edited.")
-    parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
-                        help="Specify extra data fields for tracks loaded from an external source.")
-    parser.add_argument("source", nargs='?',
-        help="The source to get metadata from (db, files, or a location of a track list).")
-    parser.add_argument("files", nargs='*', help="The files being edited/viewed, if any.")
-    parser.add_argument("--nodb", action="store_false", dest="matchwithdb",
-                        help="Don't try to match tracks with the database.")
-
 def getTracks(parser, args, integrateChanges=False):
 
     if args.help_tags:
@@ -506,40 +369,82 @@ def getTracks(parser, args, integrateChanges=False):
     else:
         return fNames, tracks, extraDict
 
-def main():
-    actionChoices = ["view", "edit", "save"]
 
-    progDesc = """View and edit the metadata of music files. Can be used to make changes
-to files and/or synchronize metadata between files and the database."""
+
+
+
+def copy_metadata(source_tracks, dest_strs, test):
+    for dest_str in dest_strs:
+        if dest_str.lower() in tracklist_exts:
+            print('Saving tracks to %s' % (dest_str))
+            if not test:
+                write_tracklist(dest_str, source_tracks)
+        else:
+            dest_tracks, dest_type = parse_metadata_string(dest_str)
+            if dest_type == 'web':
+                raise ValueError('Cannot save tracks to a URL')
+
+
+def parse_metadata_string(s):
+    if url_re.match(s):
+        metadatas = parse_tracklist_from_url(s)
+        tracks = [Track(other=m) for m in metadatas]
+        return tracks, 'web'
+
+    default_metadata = None
+    if s.startswith('db:' or 'mfile:'):
+        default_metadata, s = s.split(':', 1)
+    if os.path.exists(s):
+        if os.path.isfile(s):
+            if s.lower() in tracklist_exts:
+                metadatas = read_tracklist(s)
+                tracks = [Track(other=m) for m in metadatas]
+                return tracks, 'tracklist'
+            else:
+                fnames = [s]
+        else: # Directory
+            fnames = get_fnames(s)
+    else: # Could be a glob
+        fnames = get_fnames(s)
+
+    return [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames], 'files'
+
+def main():
+    progDesc = """Copy music metadata from one source to one or more destinations."""
 
     parser = argparse.ArgumentParser(description=progDesc)
-    parser.add_argument('-r', "--use-repr", action="store_true",
-                        help="When viewing, use repr() to display rather than str().")
-    parser.add_argument("--noreloc", dest="reloc", action="store_false",
-                        help="Disable automatic relocation of files.")
-    parser.add_argument("--rebase", help="Change a track's source to this location.")
-    parser.add_argument("action", nargs='?', choices=actionChoices, help="The action to take.")
-    parser.add_argument("--suffix")
-    addDefaultArguments(parser)
+    # parser.add_argument('-r', "--use-repr", action="store_true",
+    #                     help="When viewing, use repr() to display rather than str().")
+    # parser.add_argument("--noreloc", dest="reloc", action="store_false",
+    #                     help="Disable automatic relocation of files.")
+    # parser.add_argument("--rebase", help="Change a track's source to this location.")
+    # parser.add_argument("--suffix")
+    parser.add_argument('-t', "--test", action="store_true",
+                        help="Only preview changes, do not actually make them.")
+    parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
+                        help="Specify extra data fields for tracks loaded from an external source.")
+    parser.add_argument("source", nargs='?',
+        help="The source to get metadata from (db, files, or a location of a track list).")
+    parser.add_argument("dests", nargs='*', help="The files being edited/viewed, if any.")
 
     args = parser.parse_args()
-    if not args.help_tags and args.action is None:
-        print "ERROR: Must specify action"
-        parser.print_help()
-        return
 
-    fNames, tracks, changes = getTracks(parser, args)
-    if args.rebase:
-        assert len(tracks) == 1, "Can only rebase 1 track at a time"
-        assert os.path.exists(args.rebase), "Must rebase to an existing file"
+    source_tracks, source_type = parse_metadata_string(args.source)
 
-    if args.action == "edit":
-        Edit(tracks, fNames, changes, args.test, args.matchwithdb, args.reloc, args.rebase,
-             args.suffix)
-    elif args.action == "view":
-        View(tracks, args.use_repr)
-    else:
-        Save(tracks)
+    extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])
+    for t in source_tracks:
+        for k, v in extra_args.items():
+            setattr(t.default_metadata, k, v)
+
+        print(t.format(combine=True))
+    print('\n')
+
+    # fNames, tracks, changes = getTracks(parser, args)
+    # if args.rebase:
+    #     assert len(tracks) == 1, "Can only rebase 1 track at a time"
+    #     assert os.path.exists(args.rebase), "Must rebase to an existing file"
+
+    copy_metadata(source_tracks, args.dests, args.test)
 
 if __name__ == "__main__":
     main()

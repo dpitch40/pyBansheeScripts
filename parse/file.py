@@ -10,6 +10,8 @@ from core.util import convert_str_value
 strKeys = {'album_artist', 'album_artist_sort', 'album', 'album_sort', 'artist', 'artist_sort',
            'genre', 'title', 'title_sort'}
 
+tracklist_exts = ('.tsv', '.csv', '.txt')
+
 def to_str_value(v):
     if v is None or (isinstance(v, Iterable) and all(sv is None for sv in v)):
         return ''
@@ -57,11 +59,11 @@ def write_simple_tracklist(fname, tracks):
                 writer.writerow([track.title, length_str])
 
 # Reads a track list from a file
-def read_tracklist(fName):
-    if fName.lower().endswith('.txt'):
-        return read_simple_tracklist(fName)
-    with open(fName, 'r') as f:
-        reader = csv.DictReader(f)
+def read_tracklist(fname):
+    if fname.lower().endswith('.txt'):
+        return read_simple_tracklist(fname)
+    with open(fname, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t' if fname.lower().endswith('.tsv') else ',')
         tracks = list()
         for row in reader:
             for k, v in row.items():
@@ -70,12 +72,11 @@ def read_tracklist(fName):
     return tracks
 
 # Writes a track list to a file
-def write_tracklist(fName, tracks):
-    if fName.lower().endswith('.txt'):
-        return write_simple_tracklist(fName, tracks)
-    with open(fName, 'w') as f:
-        writer = csv.DictWriter(f, tracks[0].all_keys)
+def write_tracklist(fname, tracks):
+    if fname.lower().endswith('.txt'):
+        return write_simple_tracklist(fname, tracks)
+    with open(fname, 'w') as f:
+        writer = csv.DictWriter(f, tracks[0].all_keys, delimiter='\t' if fname.lower().endswith('.tsv') else ',')
         writer.writeheader()
         for track in tracks:
             writer.writerow(dict([(k, to_str_value(v)) for k, v in track.to_dict().items()]))
-    return tracks
