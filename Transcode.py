@@ -12,6 +12,7 @@ from core.metadata import Metadata
 from core.util import get_fnames
 from db.db import MusicDb
 from match import match_metadata_to_files
+from mfile import open_music_file
 from mfile.mfile import MusicFile
 from parse import get_track_list
 from core.track import Track
@@ -56,7 +57,9 @@ def transcode(input_files, oom, bitrate, test):
                 ext = os.path.splitext(dest)[1]
                 encoded = convert(fname, dest, metadata, ext, bitrate)
             else:
-                encoded = MusicFile(dest, {'bitrate': bitrate * 1000})
+                input_track = open_music_file(fname)
+                encoded = MusicFile(dest, {'bitrate': bitrate * 1000,
+                                           'fsize': int(input_track.length * bitrate / 8)}
 
             if isinstance(metadata, MusicDb):
                 metadata.update(encoded, False)
