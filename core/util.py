@@ -17,6 +17,8 @@ PATHNAME_CHARS = "~!@$&*()-_=+:',."
 initial_period_re = re.compile(r"^(\.+)")
 tuple_re = re.compile(r"\(([^\)]+)\)")
 
+ts_fmt = '%Y-%m-%d %H:%M%S'
+
 def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 
     def desc_func(name):
@@ -237,6 +239,11 @@ def convert_str_value(v, convertNumbers=True):
     elif isinstance(v, str) and convertNumbers and v.isdigit():
         return int(v)
     else:
+        try:
+            return datetime.strptime(v, ts_fmt)
+        except ValueError:
+            pass
+
         m = tuple_re.match(v)
         if m:
             return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))

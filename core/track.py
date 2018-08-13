@@ -41,9 +41,10 @@ class Track(FormattingDictLike):
         return m1 or m2 or m3
 
     def __getattr__(self, key):
+        mo = self._metadata_ordering()
         if key in self.all_keys:
             value = None
-            for metadata in self._metadata_ordering():
+            for metadata in mo:
                 if metadata is not None:
                     try:
                         value = getattr(metadata, key)
@@ -53,6 +54,12 @@ class Track(FormattingDictLike):
                         pass
             return value
         else:
+            for metadata in mo:
+                try:
+                    return getattr(metadata, key)
+                except AttributeError:
+                    pass
+
             return super(Track, self).__getattribute__(key)
 
     def to_dict(self, combine=True):

@@ -1,10 +1,11 @@
 import os.path
 import csv
+from datetime import datetime
 from io import StringIO
 from collections import defaultdict
 from core.metadata import Metadata
 from .util import convert_to_tracks, parse_time_str
-from core.util import convert_str_value, value_is_none
+from core.util import convert_str_value, value_is_none, ts_fmt
 
 strKeys = {'album_artist', 'album_artist_sort', 'album', 'album_sort', 'artist', 'artist_sort',
            'genre', 'title', 'title_sort'}
@@ -14,6 +15,8 @@ tracklist_exts = ('.tsv', '.csv', '.txt')
 def to_str_value(v):
     if value_is_none(v):
         return ''
+    elif isinstance(v, datetime):
+        return v.strftime(ts_fmt)
     else:
         return str(v)
 

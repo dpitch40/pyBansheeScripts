@@ -19,7 +19,7 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
     matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
 
     for source_track, dest_track in matched:
-        if getattr(source_track, 'location', None) == dest_track.location:
+        if source_track.mfile is not None and source_track.mfile.location == dest_track.location:
             # Both tracks have the same base file--we are copying from the file to the db or vice versa
             source_md = source_track.default_metadata
             if isinstance(source_md, MusicFile):
