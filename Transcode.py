@@ -71,7 +71,7 @@ def transcode(input_files, oom, bitrate, test):
             print('%s NOT MATCHED' % fname)
         print()
     if not test:
-        config.DefaultDb.commit()
+        config.DefaultDb().commit()
 
     print('%d/%d matched' % (len(matched), len(input_files)))
 

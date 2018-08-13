@@ -419,7 +419,7 @@ def sync_playlists(dryrun):
     # Set of parent directories of the playlists
     p_dirs = list()
 
-    playlists = config.DefaultDb.load_playlists()
+    playlists = config.DefaultDb().load_playlists()
     all_tracks = add_extra_track_data(playlists)
     for p_name, p_tracks in sorted(playlists.items()):
         if not p_tracks:

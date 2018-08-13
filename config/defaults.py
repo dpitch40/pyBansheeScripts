@@ -50,8 +50,8 @@ CheckSizes = True
 TsFmt = "%Y-%m-%d %H:%M:%S"
 # album_artist defaults to artist if not specified
 AlbumArtistDefault = True
-# Default MusicDb class to use
-DefaultDb = None
+# Default MusicDb class to use--callable
+DefaultDb = lambda x: None
 # Default bit rate to encode arbitrary tracks to
 DefaultBitrate = 128
 # Default bit rate to encode CDs to
