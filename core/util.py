@@ -4,10 +4,9 @@ import os
 import os.path
 import re
 import glob
+from collections.abc import Iterable
 
 from urllib.request import url2pathname, pathname2url
-
-from mfile import mapping as mfile_mapping
 
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
@@ -16,6 +15,7 @@ xmlEscapedChars = "'"
 PATHNAME_CHARS = "~!@$&*()-_=+:',."
 
 initial_period_re = re.compile(r"^(\.+)")
+tuple_re = re.compile(r"\(([^\)]+)\)")
 
 def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 
@@ -135,6 +135,7 @@ def get_fnames(dir_):
     if g != [dir_]:
         return sorted(g)
 
+    from mfile import mapping as mfile_mapping
     allowed_exts = set(mfile_mapping.keys())
 
     fnames = os.listdir(dir_)
@@ -226,6 +227,9 @@ def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
         return sorted(on1not2), sorted(common), sorted(on2not1)
     else:
         return on1not2, common, on2not1
+
+def value_is_none(v):
+    return v is None or (isinstance(v, Iterable) and all(sv is None for sv in v))
 
 def convert_str_value(v, convertNumbers=True):
     if v == '' or v == "None" or v is None:

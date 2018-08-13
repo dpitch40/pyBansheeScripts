@@ -56,7 +56,7 @@ class Track(FormattingDictLike):
             return super(Track, self).__getattribute__(key)
 
     def to_dict(self, combine=True):
-        if combine:
+        if True:
             d = dict([(key, getattr(self, key)) for key in self.all_keys])
         else:
             d = defaultdict(dict)
@@ -75,24 +75,8 @@ class Track(FormattingDictLike):
 
         return d
 
-    def _format_dict(self, combine=True):
-        d = self.to_dict(combine=combine)
-        for k, v in d.items():
-            if isinstance(v, dict):
-                d[k] = '/'.join(['%s:%s' % (source, self._format_value(k, subv)) for source, subv in v.items()])
-            else:
-                d[k] = self._format_value(k, v)
-        return d
-
-    def _format_length(self, value):
-        return '%.3f' % (value / 1000)
-
-    def format(self, combine=True):
-        d = self._format_dict(combine=combine)
-        for k, v in d.items():
-            if v is None:
-                d[k] = ''
-        return (self.sigil * 3) + ' ' + '\n    '.join([l % d for l in self.format_lines])
+    def __repr__(self):
+        return pprint.pformat(self.to_dict(False))
 
     @classmethod
     def from_file(cls, fname, **kwargs):
@@ -120,20 +104,18 @@ class Track(FormattingDictLike):
             self.db.save()
 
     def commit(self):
-        if self.mfile:
-            self.mfile.commit()
         if self.db:
             self.db.commit()
 
-    def update(self, from_, to_):
-        for name in (from_, to_):
-            if getattr(self, name) is None:
-                raise AttributeError('Track has no %s' % name)
-        updater_name = '_update_%s_to_%s' % (from_, to_)
-        if hasattr(self, updater_name):
-            getattr(self, updater_name)()
-        else:
-            getattr(self, to_).update(getattr(self, from_))
+    # def update(self, from_, to_):
+    #     for name in (from_, to_):
+    #         if getattr(self, name) is None:
+    #             raise AttributeError('Track has no %s' % name)
+    #     updater_name = '_update_%s_to_%s' % (from_, to_)
+    #     if hasattr(self, updater_name):
+    #         getattr(self, updater_name)()
+    #     else:
+    #         getattr(self, to_).update(getattr(self, from_))
 
     # def _update_mfile_to_db(self):
     #     self.db.update(self.mfile)
@@ -142,8 +124,8 @@ def main():
     import sys
 
     track = Track.from_file(sys.argv[1])
-    print(track.format(combine=False))
-    print(track.format(combine=True))
+    print(track.format())
+    print(repr(track))
 
 if __name__ == '__main__':
     main()

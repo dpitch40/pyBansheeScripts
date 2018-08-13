@@ -1,1 +1,1 @@
-from .match import match_metadata_to_files
+from .match import match_metadata_to_files, match_metadata_to_tracks

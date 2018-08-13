@@ -44,32 +44,34 @@ def transcode(input_files, oom, bitrate, test):
         output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
     output_metadatas = [t.default_metadata for t in output_tracks]
 
-    matched, unmatched_tracks, unmatched_files = match_metadata_to_files(output_metadatas, input_files)
+    matched, unmatched_inputs, unmatched_metadatas = match_metadata_to_files(input_files, output_metadatas)
 
-    for fname in input_files:
-        if fname in matched:
-            metadata = matched[fname]
-            dest = getattr(metadata, 'location', metadata.calculate_fname())
-            print('Transcoding %s\n         to %s with the metadata\n%s' %
-                                (fname, dest, metadata.format()))
+    for input_track, metadata in matched:
+        fname = input_track.location
+        metadata = matched[fname]
+        dest = getattr(metadata, 'location', metadata.calculate_fname())
+        print('Transcoding %s\n         to %s with the metadata\n%s' %
+                            (fname, dest, metadata.format()))
 
-            if not test:
-                ext = os.path.splitext(dest)[1]
-                encoded = convert(fname, dest, metadata, ext, bitrate)
-            else:
-                input_track = open_music_file(fname)
-                encoded = MusicFile(dest, {'bitrate': bitrate * 1000,
-                                           'fsize': int(input_track.length * bitrate / 8)})
-
-            if isinstance(metadata, MusicDb):
-                metadata.update(encoded, False)
-                for k, v in sorted(metadata.changes().items()):
-                    print('%s\t-> %s' % (k, v))
-                if not test:
-                    metadata.save()
+        if not test:
+            ext = os.path.splitext(dest)[1]
+            encoded = convert(fname, dest, metadata, ext, bitrate)
         else:
-            print('%s NOT MATCHED' % fname)
+            input_track = open_music_file(fname)
+            encoded = MusicFile(dest, {'bitrate': bitrate * 1000,
+                                       'fsize': int(input_track.length * bitrate / 8)})
+
+        if isinstance(metadata, MusicDb):
+            metadata.update(encoded, False)
+            for k, v in sorted(metadata.changes().items()):
+                print('%s\t-> %s' % (k, v))
+            if not test:
+                metadata.save()
+
+    for track in unmatched_inputs:
+        print('%s NOT MATCHED' % track.location)
         print()
+
     if not test:
         config.DefaultDb().commit()
 

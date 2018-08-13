@@ -5,7 +5,7 @@ import string
 import config
 from core.mw import MappingWrapper
 from core.fd import FormattingDictLike
-from core.util import filter_path_elements
+from core.util import filter_path_elements, value_is_none
 
 NOT_FOUND = object()
 
@@ -34,8 +34,8 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     derived_keys = {'tnc', 'dnc'}
 
-    format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss']
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+                    ('tnc', 'dnc', 'year', 'length')]
 
     def __init__(self, d=None):
         MappingWrapper.__init__(self, d)
@@ -54,9 +54,11 @@ class Metadata(MappingWrapper, FormattingDictLike):
         return changes
 
     def update(self, other, copy_none=True):
-        for k, v in self.update_changes(other, copy_none).items():
-            if k not in self.read_only_keys:
-                setattr(self, k, v)
+        self.update_from_dict(self.update_changes(other, copy_none))
+
+    def update_from_dict(self, d):
+        for k, v in d.items():
+            setattr(self, k, v)
 
     def to_dict(self):
         return dict([(k, getattr(self, k)) for k in self.all_keys])
@@ -133,12 +135,6 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
         new_base = "%s%s%s" % (tn, title, ext)
         return os.path.join(base_dir, filter_path_elements(path_elements + [new_base]))
-
-
-    # Formatting
-
-    def _format_length(self, value):
-        return '%.3f' % (value / 1000)
 
     def __str__(self):
         return '%s<%s, %s, %s>' % (self.__class__.__name__, self.title, self.artist, self.album)

@@ -17,36 +17,15 @@ class MusicDb(FileBased):
                                      'location',
                                      'fsize') # File size in bytes
 
-    format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps\t%(fsize)s\t'
-                        '%(rating)s/5, %(play_count)s plays, %(skip_count)s skips',
-                    'Added %(date_added)s, last played %(last_played)s, last skipped %(last_skipped)s',
-                    '%(location)s']
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+                    ('tnc', 'dnc', 'year', 'length', 'bitrate', 'fsize', 'rating', 'play_count', 'skip_count'),
+                    ('date_added', 'last_played', 'last_skipped'),
+                    ('location',)]
 
     read_only_keys = ()
 
     def __init__(self, d):
         super(MusicDb, self).__init__(d)
-
-    # String formatting
-
-    def _format_dict(self):
-        d = super(MusicDb, self)._format_dict()
-        for k in ('last_played',
-                  'last_skipped',
-                  'date_added'):
-            if d[k]:
-                d[k] = d[k].strftime('%Y-%m-%d %H:%M:%S')
-        return d
-
-    def _format_bitrate(self, bitrate):
-        bitrate = bitrate / 1000
-        if bitrate % 1 == 0:
-            bitrate = int(bitrate)
-        return bitrate
-
-    def _format_fsize(self, fsize):
-        return '%.2fMB' % (fsize / 1000000)
 
     # To be overridden
 

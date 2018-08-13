@@ -6,6 +6,7 @@ from mfile import open_music_file
 from db import open_db
 from core.util import sort_key, generate_disc_lens, get_fnames
 from parse import get_track_list
+from core.track import Track
 
 def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     keys = list()
@@ -60,32 +61,33 @@ def _create_track_mapping(tracks):
 
     return track_mapping
 
-def match_metadata_to_files(metadatas, fnames, use_db=False):
-    if use_db:
-        tracks = [open_db(fname) for fname in fnames]
-    else:
-        tracks = [open_music_file(fname) for fname in fnames]
+def match_metadata_to_files(fnames, metadatas, use_db=False):
+    default_metadata = 'db' if use_db else 'mfile'
+    tracks = [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames]
+    return match_metadata_to_tracks(metadatas, tracks)
+
+def match_metadata_to_tracks(tracks, metadatas):
     tracks.sort(key=sort_key())
 
     track_mapping = _create_track_mapping(tracks)
 
-    matched = dict()
+    matched = list()
     unmatched_metadatas = list()
 
     metadata_disc_lens = generate_disc_lens(metadatas)
-    for i, metadata in enumerate(sorted(metadatas, key=sort_key)):
+    for i, metadata in enumerate(sorted(metadatas, key=sort_key())):
         keys = _extract_keys(metadata, i, metadata_disc_lens, True)
         for key in keys:
             if key in track_mapping:
-                matched[track_mapping[key].location] = metadata
+                matched.append((track_mapping[key], metadata))
                 # print('--- MATCHED on %s' % str(key))
                 break
         else:
             unmatched_metadatas.append(metadata)
 
-    unmatched_files = [t.location for t in tracks if t not in map(operator.itemgetter(1), matched)]
+    unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(1), matched)]
 
-    return matched, unmatched_metadatas, unmatched_files
+    return matched, unmatched_tracks, unmatched_metadatas
 
 def main():
     parser = argparse.ArgumentParser()

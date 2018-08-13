@@ -4,7 +4,6 @@ from core.metadata import Metadata
 
 #regex for times
 time_re = re.compile(r"(\d+):(\d{2})")
-tuple_re = re.compile(r"\(([^\)]+)\)")
 
 def parse_time_str(time_str):
     if not isinstance(time_str, str):

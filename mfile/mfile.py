@@ -19,24 +19,13 @@ class MusicFile(FileBased):
                       'bitrate',
                       'fsize')
 
-    format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps\t%(fsize)s',
-                    '%(location)s']
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+                    ('tnc', 'dnc', 'year', 'length', 'bitrate', 'fsize'),
+                    ('location',)]
 
     def __init__(self, fname, d):
         self.fname = fname
         super(MusicFile, self).__init__(d)
-
-    # Formatting
-
-    def _format_bitrate(self, bitrate):
-        bitrate = bitrate / 1000
-        if bitrate % 1 == 0:
-            bitrate = int(bitrate)
-        return bitrate
-
-    def _format_fsize(self, fsize):
-        return '%.2fMB' % (fsize / 1000000)
 
     # Functionality
 
