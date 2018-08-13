@@ -11,7 +11,7 @@ cl.ArtistName AS album_artist, cl.ArtistNameSort AS album_artist_sort, ct.Genre 
 ct.TrackNumber AS tn, ct.TrackCount AS tc, ct.Disc AS dn, ct.DiscCount AS dc,
 ct.Uri AS Uri, ct.Duration AS length, ct.BitRate AS bitrate, ct.Rating AS rating,
 ct.PlayCount AS play_count, ct.SkipCount AS skip_count, ct.DateAddedStamp AS date_added,
-ct.LastPlayedStamp AS last_played, ct.LastSkippedStamp AS last_skipped
+ct.LastPlayedStamp AS last_played, ct.LastSkippedStamp AS last_skipped, ct.FileSize AS fsize
 FROM CoreTracks ct
 JOIN CoreAlbums cl ON ct.AlbumID = cl.AlbumID, CoreArtists ca ON ct.ArtistID = ca.ArtistID%(where)s
 ORDER BY album_artist, artist, album, dn, tn"""
@@ -29,16 +29,15 @@ field_mapping = {'title': 'Title',
                  'skip_count': 'SkipCount',
                  'date_added': 'DateAddedStamp',
                  'last_played': 'LastPlayedStamp',
-                 'last_skipped': 'LastSkippedStamp'}
+                 'last_skipped': 'LastSkippedStamp',
+                 'fsize': 'FileSize'}
 
 update_stmt = """UPDATE CoreTracks SET %s WHERE TrackID = :TrackID"""
 
 class BansheeDb(MusicDb):
     """Class for metadata derived from a Banshee sqlite3 database."""
 
-    read_only_keys = ('bitrate',
-                      'length',
-                       # These fields are read-only for Banshee tracks (due to their being from linked tables)
+    read_only_keys = (# These fields are read-only for Banshee tracks (due to their being from linked tables)
                       'album',
                       'album_sort',
                       'album_artist',
@@ -54,23 +53,17 @@ class BansheeDb(MusicDb):
     # Overridden from MusicDb
 
     def _save(self, changes):
-        changes = list()
-        for name, trans_name in field_mapping.items():
-            if name in self.wrapped:
-                if self.wrapped[name] != self.sql_row.get(name, None):
-                    changes.append('%s = :%s' % (trans_name, name))
-            elif name in self.sql_row:
-                changes.append('%s = NULL' % trans_name)
-
-        if changes:
-            change_strs = list()
-            for k, v in sorted(changes.items()):
-                name = field_mapping.get(k, k)
+        changes_sql = list()
+        for name, v in sorted(changes.items()):
+            if name in field_mapping:
+                trans_name = field_mapping[name]
                 if v is None:
-                    change_strs.append('%s = NULL' % name)
+                    changes_sql.append('%s = NULL' % trans_name)
                 else:
-                    change_strs.append('%s = :%s' % (name, k))
-            db.sql(update_stmt % ', '.join(change_strs), **self.to_dict())
+                    changes_sql.append('%s = :%s' % (trans_name, name))
+
+        if changes_sql:
+            db.sql(update_stmt % ', '.join(changes_sql), **self.to_dict())
 
     @classmethod
     def commit(cls):
@@ -218,7 +211,9 @@ def main():
     import datetime
     track = BansheeDb.from_file(sys.argv[1])
 
+    print(track.wrapped)
     print(track.format())
+    print(repr(track))
 
     # del track.title_sort
     # del track.last_skipped

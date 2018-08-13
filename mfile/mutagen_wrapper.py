@@ -34,7 +34,7 @@ class MutagenFile(MusicFile):
 
     # MusicFile methods overridden
 
-    def _save(self):
+    def _save(self, changes):
         self.wrapped.save()
 
     def rebase(self, new_fname):

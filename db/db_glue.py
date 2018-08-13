@@ -1,18 +1,11 @@
 """Database integration class. Handles all I/O with the sqlite database."""
 
 import sqlite3 as sql
-import os.path
 import os
-import re
 import operator
 import config
 
 defaultLoc = config.BansheeDbLoc
-
-# Characters to escape when converting to SQL-compatible strings
-PATHNAME_CHARS = "~!@$&*()-_=+:',."
-
-initialPeriodRe = re.compile(r"^(\.+)")
 
 def new(loc=defaultLoc):
     """Returns a new cursor to the database. (Creates the database if none exists)"""

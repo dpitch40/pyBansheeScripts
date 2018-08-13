@@ -12,13 +12,15 @@ class MusicFile(FileBased):
     """Base class for metadata derived from a music file."""
 
     all_keys = FileBased.all_keys + ('bitrate', # Integer number of bits/second
-                                     'location') # File location
+                                     'location', # File location
+                                     'fsize') # File size in bytes
     read_only_keys = ('length',
                       'location',
-                      'bitrate')
+                      'bitrate',
+                      'fsize')
 
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps',
+                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps\t%(fsize)s',
                     '%(location)s']
 
     def __init__(self, fname, d):
@@ -32,6 +34,9 @@ class MusicFile(FileBased):
         if bitrate % 1 == 0:
             bitrate = int(bitrate)
         return bitrate
+
+    def _format_fsize(self, fsize):
+        return '%.2fMB' % (fsize / 1000000)
 
     # Functionality
 
@@ -50,6 +55,10 @@ class MusicFile(FileBased):
     @property
     def location(self):
         return self.fname
+
+    @property
+    def fsize(self):
+        return os.path.getsize(self.location)
 
     # To be overridden
 

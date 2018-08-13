@@ -73,11 +73,11 @@ class Track(FormattingDictLike):
         if self.db:
             self.db.save()
 
-    def update_changes(self, from_, to_):
-        for name in (from_, to_):
-            if getattr(self, name) is None:
-                raise AttributeError('Track has no %s' % name)
-        return getattr(self, to_).update_changes(getattr(self, from_))
+    def commit(self):
+        if self.mfile:
+            self.mfile.commit()
+        if self.db:
+            self.db.commit()
 
     def update(self, from_, to_):
         for name in (from_, to_):
@@ -89,8 +89,8 @@ class Track(FormattingDictLike):
         else:
             getattr(self, to_).update(getattr(self, from_))
 
-    def _update_mfile_to_db(self):
-        self.db.update(self.mfile)
+    # def _update_mfile_to_db(self):
+    #     self.db.update(self.mfile)
 
 def main():
     import sys

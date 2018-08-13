@@ -14,10 +14,11 @@ class MusicDb(FileBased):
                                      'last_played',
                                      'last_skipped',
                                      'date_added',
-                                     'location')
+                                     'location',
+                                     'fsize') # File size in bytes
 
     format_lines = ['%(title)s - %(artist)s - %(album)s (%(album_artist)s) - %(genre)s',
-                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps\t'
+                    '%(tn)s/%(tc)s, %(dn)s/%(dc)s\t%(year)s\t%(length)ss\t%(bitrate)skbps\t%(fsize)s\t'
                         '%(rating)s/5, %(play_count)s plays, %(skip_count)s skips',
                     'Added %(date_added)s, last played %(last_played)s, last skipped %(last_skipped)s',
                     '%(location)s']
@@ -43,6 +44,9 @@ class MusicDb(FileBased):
         if bitrate % 1 == 0:
             bitrate = int(bitrate)
         return bitrate
+
+    def _format_fsize(self, fsize):
+        return '%.2fMB' % (fsize / 1000000)
 
     # To be overridden
 

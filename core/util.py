@@ -2,12 +2,18 @@ from datetime import datetime
 from collections import defaultdict
 import os
 import os.path
+import re
 import glob
 
 from urllib.request import url2pathname, pathname2url
 
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
+
+# Characters to escape when converting to SQL-compatible strings
+PATHNAME_CHARS = "~!@$&*()-_=+:',."
+
+initial_period_re = re.compile(r"^(\.+)")
 
 def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 
@@ -170,7 +176,7 @@ def excape_xml_chars(s):
 def pathname2sql(path):
     pathDir, pathBase = os.path.split(path)
     # Fix filenames with periods at the start
-    m = initialPeriodRe.match(pathBase)
+    m = initial_period_re.match(pathBase)
     if m:
         numPeriods = len(m.group(1))
         path = os.path.join(pathDir, "%s%s" % ('_' * numPeriods, pathBase[numPeriods:]))

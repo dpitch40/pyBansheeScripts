@@ -102,6 +102,8 @@ class QLDb(MusicDb):
     # Overridden from MusicDb
 
     def _save(self, changes):
+        # No need for any action, self.wrapped is already a song in qls._songs that will be saved
+        # when commit is called
         pass
 
     @classmethod
@@ -179,6 +181,7 @@ class QLDb(MusicDb):
     last_played = date_descriptor('~#lastplayed')
     last_skipped = date_descriptor('~#lastskipped')
     year = int_descriptor('date')
+    fsize = int_descriptor('~#filesize')
     rating = make_descriptor_func(lambda x: int(x * 5), lambda x: x / 5)('~#rating')
     length = make_descriptor_func(lambda x: int(x * 1000), lambda x: int(x / 1000))('~#length')
     bitrate = make_descriptor_func(lambda x: x * 1000, lambda x: int(x / 1000))('~#bitrate')
@@ -189,7 +192,7 @@ class QLDb(MusicDb):
 def main():
     import sys
     import datetime
-    track = QLDb.from_file(sys.argv[1])
+    track = QLDb.from_file(os.path.abspath(sys.argv[1]))
 
     print(track.wrapped)
     print(track.format())
