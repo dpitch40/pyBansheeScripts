@@ -61,7 +61,8 @@ class Metadata(MappingWrapper, FormattingDictLike):
         self.update_from_dict(self.update_changes(other, copy_none))
 
     def update_from_dict(self, d):
-        for k, v in d.items():
+        # Reverse sort so dn/tn get set before dc/tc
+        for k, v in sorted(d.items(), reverse=True):
             setattr(self, k, v)
 
     def to_dict(self):

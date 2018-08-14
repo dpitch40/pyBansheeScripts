@@ -15,24 +15,19 @@ from parse.web import url_re, parse_tracklist_from_url
 
 from match import match_metadata_to_tracks
 
-def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
+def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
     matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
 
     for source_track, dest_track in matched:
-        if source_track.mfile is not None and source_track.mfile.location == dest_track.location:
-            # Both tracks have the same base file--we are copying from the file to the db or vice versa
-            source_md = source_track.default_metadata
-            if isinstance(source_md, MusicFile):
-                dest_mds = [(dest_track.db, 'db')]
-            else:
-                dest_mds = [(dest_track.mfile, 'mfile')]
-        else:
-            source_md = source_track
-            dest_mds = list()
-            for name in ('db', 'mfile'):
-                md = getattr(dest_track, name)
-                if md is not None:
-                    dest_mds.append((md, name))
+        source_md = source_track
+        dest_mds = list()
+        for name in ('db', 'mfile'):
+            md = getattr(dest_track, name)
+            if md is not None:
+                dest_mds.append((md, name))
+
+        for k, v in sorted(extra_args.items()):
+            setattr(source_md, k, v)
 
         track_changes = dict()
         for md, name in dest_mds:
@@ -46,7 +41,7 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
             for name, changes in sorted(track_changes.items()):
                 md = getattr(dest_track, name)
                 print('    %s' % name)
-                for k, v in changes.items():
+                for k, v in sorted(changes.items()):
                     print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
 
         if reloc:
@@ -55,8 +50,8 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
                 print('    Relocating to %s' % new_loc)
                 if dest_track.db:
                     dest_track.db.location = new_loc
-                    if not test and dest_track.mfile:
-                        dest_track.mfile.move(new_loc)
+                if not test and dest_track.mfile:
+                    dest_track.mfile.move(new_loc)
 
         if not test:
             dest_track.save()
@@ -72,7 +67,7 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test):
     if not test:
         DefaultDb().commit()
 
-def copy_metadata(source_tracks, dest_strs, copy_none, reloc, test):
+def copy_metadata(source_tracks, dest_strs, copy_none, reloc, extra_args, test):
     for dest_str in dest_strs:
         print('---\n%s\n---\n' % dest_str)
         if os.path.splitext(dest_str.lower())[1] in tracklist_exts:
@@ -84,7 +79,7 @@ def copy_metadata(source_tracks, dest_strs, copy_none, reloc, test):
             if dest_type == 'web':
                 raise ValueError('Cannot save tracks to a URL')
 
-            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, test)
+            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test)
 
 def parse_metadata_string(s):
     if url_re.match(s):
@@ -133,9 +128,6 @@ def main():
 
     extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])
     for t in source_tracks:
-        for k, v in extra_args.items():
-            setattr(t.default_metadata, k, v)
-
         print(t.format())
 
     if args.rebase:
@@ -147,7 +139,8 @@ def main():
 
     if len(args.dests) > 0:
         print()
-        copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc, args.test)
+        copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc,
+                      extra_args, args.test)
 
 if __name__ == "__main__":
     main()
