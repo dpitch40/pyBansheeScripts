@@ -25,6 +25,9 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
             if dn and disc_lens is not None:
                 keys.append((title, artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((title, artist, album, tn, dn))
+            if dn is not None and len(disc_lens) == 1:
+                keys.append((artist, album, tn, None))
+
 
         keys.append((title, artist, album))
 
@@ -35,6 +38,8 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
             if dn and disc_lens is not None:
                 keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((artist, album, tn, dn))
+            if dn is not None and len(disc_lens) == 1:
+                keys.append((artist, album, tn, None))
 
     return keys
 
@@ -47,7 +52,7 @@ def _create_track_mapping(tracks):
     disc_lens = generate_disc_lens(tracks)
 
     for i, track in enumerate(tracks):
-        possKeys = _extract_keys(track, i, disc_lens)
+        possKeys = _extract_keys(track, i, disc_lens, True)
         
         # Ensure each mapping key is unique across all tracks
         for k in possKeys:
@@ -64,12 +69,13 @@ def _create_track_mapping(tracks):
 def match_metadata_to_files(fnames, metadatas, use_db=False):
     default_metadata = 'db' if use_db else 'mfile'
     tracks = [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames]
-    return match_metadata_to_tracks(metadatas, tracks)
+    return match_metadata_to_tracks(tracks, metadatas)
 
 def match_metadata_to_tracks(tracks, metadatas):
     tracks.sort(key=sort_key())
 
     track_mapping = _create_track_mapping(tracks)
+    # print('\n'.join(sorted(map(str, track_mapping.keys()))))
 
     matched = list()
     unmatched_metadatas = list()
@@ -77,6 +83,9 @@ def match_metadata_to_tracks(tracks, metadatas):
     metadata_disc_lens = generate_disc_lens(metadatas)
     for i, metadata in enumerate(sorted(metadatas, key=sort_key())):
         keys = _extract_keys(metadata, i, metadata_disc_lens, True)
+        # print(metadata)
+        # for key in keys:
+            # print('\t', key)
         for key in keys:
             if key in track_mapping:
                 matched.append((track_mapping[key], metadata))

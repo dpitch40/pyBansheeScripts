@@ -93,7 +93,8 @@ class QLDb(MusicDb):
                'year': 'date',
                'location': '~filename',
                'play_count': '~#playcount',
-               'skip_count': '~#skipcount'
+               'skip_count': '~#skipcount',
+               'fsize': '~#filesize'
         }
 
     def __init__(self, song):
@@ -181,9 +182,8 @@ class QLDb(MusicDb):
     last_played = date_descriptor('~#lastplayed')
     last_skipped = date_descriptor('~#lastskipped')
     year = int_descriptor('date')
-    fsize = int_descriptor('~#filesize')
     rating = make_descriptor_func(lambda x: int(x * 5), lambda x: x / 5)('~#rating')
-    length = make_descriptor_func(lambda x: int(x * 1000), lambda x: int(x / 1000))('~#length')
+    length = make_descriptor_func(lambda x: int(x * 1000), lambda x: x / 1000)('~#length')
     bitrate = make_descriptor_func(lambda x: x * 1000, lambda x: int(x / 1000))('~#bitrate')
 
     tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber')

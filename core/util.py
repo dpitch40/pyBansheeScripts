@@ -19,7 +19,7 @@ tuple_re = re.compile(r"\(([^\)]+)\)")
 
 ts_fmt = '%Y-%m-%d %H:%M%S'
 
-def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
+def make_descriptor_func(decode_func, encode_func=None):
 
     def desc_func(name):
 
@@ -44,7 +44,7 @@ def make_descriptor_func(decode_func, encode_func=None, unpack_list=False):
 date_descriptor = make_descriptor_func(datetime.fromtimestamp, lambda dt: int(dt.timestamp()))
 int_descriptor = make_descriptor_func(int, str)
 
-def make_numcount_descriptors(numname, countname, fieldname, unpack_list=False):
+def make_numcount_descriptors(numname, countname, fieldname, alttotal=''):
 
     def get_num(self):
         try:
@@ -66,7 +66,10 @@ def make_numcount_descriptors(numname, countname, fieldname, unpack_list=False):
 
     def get_count(self):
         try:
-            return int(self.get_item(fieldname).split('/')[1])
+            count = self.get_item(alttotal)
+            if count is None:
+                count = self.get_item(fieldname).split('/')[1]
+            return int(count)
         except (KeyError, IndexError):
             return None
 
@@ -84,6 +87,9 @@ def make_numcount_descriptors(numname, countname, fieldname, unpack_list=False):
 
     def get_numcount(self):
         try:
+            count = self.get_item(alttotal)
+            if count is not None:
+                return int(self.get_item(fieldname)), int(count)
             numcount = self.get_item(fieldname)
             if '/' in numcount:
                 num, count = numcount.split('/')
@@ -113,7 +119,7 @@ sort_key_defaults = {'album_artist': '',
                      'dn': 0,
                      'tn': 0}
 def sort_key(*args):
-    if args == []:
+    if len(args) == 0:
         args = ['album_artist', 'artist', 'album', 'dn', 'tn']
     def _inner(track, a=args):
         return tuple([getattr(track, arg) or sort_key_defaults[arg] for arg in a])

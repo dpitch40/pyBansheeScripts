@@ -8,6 +8,9 @@ from .m4a import M4AFile
 mapping = dict([(f.ext, f) for f in (MP3File, OggFile, FlacFile, M4AFile)])
 
 def open_music_file(fname):
+    if not os.path.exists(fname):
+        return None
+
     _, ext = os.path.splitext(fname)
     ext = ext.lower()
     if ext in mapping:

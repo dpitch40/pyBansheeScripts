@@ -41,32 +41,41 @@ def transcode(input_files, oom, bitrate, test):
     if os.path.isfile(oom) or http_re.match(oom):
         output_tracks = [Track.from_metadata(m) for m in get_track_list(oom)]
     else:
-        output_tracks = [Track.from_file(fname) for fname in get_fnames(oom)]
-    output_metadatas = [t.default_metadata for t in output_tracks]
+        output_tracks = [Track.from_file(fname, default_metadata='db') for fname in get_fnames(oom)]
 
-    matched, unmatched_inputs, unmatched_metadatas = match_metadata_to_files(input_files, output_metadatas)
+    matched, unmatched_inputs, unmatched_outputs = match_metadata_to_files(input_files, output_tracks)
 
-    for input_track, metadata in matched:
+    for input_track, output_track in matched:
         fname = input_track.location
-        metadata = matched[fname]
-        dest = getattr(metadata, 'location', metadata.calculate_fname())
-        print('Transcoding %s\n         to %s with the metadata\n%s' %
-                            (fname, dest, metadata.format()))
+        dest = getattr(output_track, 'location', output_track.calculate_fname())
 
         if not test:
             ext = os.path.splitext(dest)[1]
-            encoded = convert(fname, dest, metadata, ext, bitrate)
+            encoded = convert(fname, dest, output_track, ext, bitrate)
         else:
-            input_track = open_music_file(fname)
-            encoded = MusicFile(dest, {'bitrate': bitrate * 1000,
-                                       'fsize': int(input_track.length * bitrate / 8)})
+            encoded = Metadata.from_dict({'bitrate': bitrate * 1000,
+                                          'fsize': int(input_track.length * bitrate / 8)})
 
-        if isinstance(metadata, MusicDb):
-            metadata.update(encoded, False)
-            for k, v in sorted(metadata.changes().items()):
-                print('%s\t-> %s' % (k, v))
+        if output_track.db is not None:
+            output_track.db.update(encoded, False)
+
+        # Fancy string formatting
+        stripped_fname, fname_ext = os.path.splitext(fname)
+        stripped_dest, dest_ext = os.path.splitext(dest)
+        max_fbase_length = max(len(stripped_fname), len(stripped_dest))
+
+        print('Transcoded %s%s\n        to %s%s with the metadata\n%s' %
+                            (stripped_fname.rjust(max_fbase_length), fname_ext,
+                             stripped_dest.rjust(max_fbase_length), dest_ext,
+                             output_track.format()))
+
+        if output_track.db is not None:
+            output_track.db.update(encoded, False)
+            for k, v in sorted(output_track.db.changes().items()):
+                print('%s\t%s -> %s' % (k, output_track.db.staged.get(k, None), v))
             if not test:
-                metadata.save()
+                output_track.db.save()
+        print()
 
     for track in unmatched_inputs:
         print('%s NOT MATCHED' % track.location)

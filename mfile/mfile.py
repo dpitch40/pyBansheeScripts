@@ -47,7 +47,10 @@ class MusicFile(FileBased):
 
     @property
     def fsize(self):
-        return os.path.getsize(self.location)
+        try:
+            return os.path.getsize(self.location)
+        except FileNotFoundError:
+            return None
 
     # To be overridden
 
