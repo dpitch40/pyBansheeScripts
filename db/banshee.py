@@ -1,8 +1,9 @@
+import config
 from db.db import MusicDb
-from db import db_glue
+from core import db_glue
 from core.util import date_descriptor, make_descriptor_func, sql2pathname, pathname2sql
 
-db = db_glue.db
+db = db_glue.new(config.BansheeDbLoc)
 
 # Statement template used to pull everything useful from the sqlite database
 select_stmt = """SELECT ct.TrackID AS TrackID, ct.Title AS title, ct.TitleSort AS title_sort,
