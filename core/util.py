@@ -20,6 +20,9 @@ tuple_re = re.compile(r"\(([^\)]+)\)")
 
 ts_fmt = '%Y-%m-%d %H:%M%S'
 
+
+# Descriptor factories for Metadata and its subclasses
+
 def make_descriptor_func(decode_func, encode_func=None):
 
     def desc_func(name):
@@ -114,6 +117,9 @@ def make_numcount_descriptors(numname, countname, fieldname, alttotal=''):
 
     return num_descriptor, count_descriptor, numcount_descriptor
 
+
+# Some metadata utility functions
+
 sort_key_defaults = {'album_artist': '',
                      'artist': '',
                      'album': '',
@@ -137,19 +143,8 @@ def generate_disc_lens(metadatas):
             return None # All of the tracks must have metadata
     return disc_lens
 
-def get_fnames(dir_):
-    """Gets a list of music file names in a directory."""
-    # Try using glob
-    g = glob.glob(dir_)
-    if g != [dir_]:
-        return sorted(g)
 
-    from mfile import mapping as mfile_mapping
-    allowed_exts = set(mfile_mapping.keys())
-
-    fnames = os.listdir(dir_)
-    return sorted([os.path.join(dir_, fname) for fname in fnames if
-                        os.path.splitext(fname)[1].lower() in allowed_exts])
+# Filename escaping/conversion
 
 def filter_fname(f):
     """ "Sanitizes" a filename: replaces forbidden characters and ending periods in directory names"""
@@ -202,7 +197,7 @@ def sql2pathname(uri):
     # Just strip the "file://" from the start and run through url2pathname
     return url2pathname(uri[7:])
 
-# Similar to db_glue.pathname2sql, but converts a pathname for a VLC playlist
+# Similar to pathname2sql, but converts a pathname for a VLC playlist
 def pathname2xml(path):
     base = pathname2sql(path)
 
@@ -213,6 +208,46 @@ def pathname2xml(path):
         base = base.replace("%%%02X" % ord(c), c)
 
     return base
+
+
+# Value interpretation/conversion
+
+def value_is_none(v):
+    return v is None or (isinstance(v, Iterable) and all(sv is None for sv in v))
+
+def convert_str_value(v, convertNumbers=True):
+    if v == '' or v == "None" or v is None:
+        return None
+    elif isinstance(v, str) and convertNumbers and v.isdigit():
+        return int(v)
+    else:
+        try:
+            return datetime.strptime(v, ts_fmt)
+        except ValueError:
+            pass
+
+        m = tuple_re.match(v)
+        if m:
+            return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
+
+    return v
+
+
+# Other filename utilities
+
+def get_fnames(dir_):
+    """Gets a list of music file names in a directory."""
+    # Try using glob
+    g = glob.glob(dir_)
+    if g != [dir_]:
+        return sorted(g)
+
+    from mfile import mapping as mfile_mapping
+    allowed_exts = set(mfile_mapping.keys())
+
+    fnames = os.listdir(dir_)
+    return sorted([os.path.join(dir_, fname) for fname in fnames if
+                        os.path.splitext(fname)[1].lower() in allowed_exts])
 
 # Takes the intersection of two lists of filenames: returns the files exclusive to the first,
 # the common names, and the names exclusive to the second.
@@ -237,25 +272,7 @@ def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
     else:
         return on1not2, common, on2not1
 
-def value_is_none(v):
-    return v is None or (isinstance(v, Iterable) and all(sv is None for sv in v))
 
-def convert_str_value(v, convertNumbers=True):
-    if v == '' or v == "None" or v is None:
-        return None
-    elif isinstance(v, str) and convertNumbers and v.isdigit():
-        return int(v)
-    else:
-        try:
-            return datetime.strptime(v, ts_fmt)
-        except ValueError:
-            pass
-
-        m = tuple_re.match(v)
-        if m:
-            return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
-
-    return v
 
 def run_with_backups(args, file_to_backup, backup_dir, num_backups):
     prog_name = args[0]
