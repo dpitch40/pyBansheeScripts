@@ -41,6 +41,8 @@ def sync(origin_dir, dest_dir, test):
             # If not, sync the whole directory
             print("SYNCING DIRECTORY\t%s" % dest_sub_dir)
             dirs_synced += 1
+            # for fname in fnames:
+            #     print('SYNCING FILE\t\t%s' % os.path.join(dest_sub_dir, fname))
             if not test:
                 shutil.copytree(dirpath, dest_sub_dir)
         else:
@@ -48,7 +50,7 @@ def sync(origin_dir, dest_dir, test):
             dest_listing = os.listdir(dest_sub_dir)
             for fname in fnames:
                 source = os.path.join(dirpath, fname)
-                dest = os.path.join(dest_dir, partial_dir, fname)
+                dest = os.path.join(dest_sub_dir, fname)
                 do_sync = False
                 if fname not in dest_listing:
                     do_sync = True
@@ -66,7 +68,7 @@ def sync_playlists(source_dir, dest_dir, test):
         source_dir += '/'
     print("\nSYNCING PLAYLISTS FROM %s to %s\n" % (source_dir, dest_dir))
 
-    args = ["rsync", "--dirs", '-u', "--times", '--info=name,del,copy,remove']
+    args = ["rsync", "--dirs", "--times", '--info=name,del,copy,remove']
     if test:
         args.append("--dry-run")
 
