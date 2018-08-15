@@ -4,7 +4,7 @@ import sqlite3 as sql
 import os
 import operator
 
-def new():
+def new(loc):
     """Returns a new cursor to the database. (Creates the database if none exists)"""
     db = DB(loc)
     return db
@@ -69,7 +69,8 @@ class DB:
             quoted_args.append(self._quote_value(v))
 
         for k, v in kwargs.items():
-            quoted_kwargs[k] = self._quote_value(v)
+            if ':%s' % k in sqlstr:
+                quoted_kwargs[k] = self._quote_value(v)
 
         # Replace non-keyword arguments in two steps, in case any of them contain question marks
         for i, quoted in enumerate(quoted_args):
