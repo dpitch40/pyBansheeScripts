@@ -112,17 +112,16 @@ def update_db(dryrun, verbose):
             if new_delta and play_count:
                 deltas_to_save.append((track, play_count))
         else:
-            # If the delta file is newly created, the delta is the play count
+            # Find the delta--the number of plays since the last time the plays table was updated
+            delta = play_count - rows[0]['play_count']
             if new_delta and play_count:
+                # If the delta file is newly created, the delta is the play count
                 deltas_to_save.append((track, play_count))
-            else:
-                # Find the delta--the number of plays since the last time the plays table was updated
-                delta = play_count - rows[0]['play_count']
-                if delta > 0:
-                    # Update the plays table entry for this track
-                    sql = """UPDATE plays SET play_count = :play_count WHERE %s""" % _make_where_str(track)
-                    # Save the delta
-                    deltas_to_save.append((track, delta))
+            elif delta > 0:
+                # Save the delta
+                deltas_to_save.append((track, delta))
+            # Update the plays table entry for this track
+            sql = """UPDATE plays SET play_count = :play_count WHERE %s""" % _make_where_str(track)
         # Run SQL
         if sql:
             if verbose:
@@ -155,6 +154,7 @@ def update_play_counts(dryrun, verbose):
     delta_db = get_delta_db(delta_db_name)
     tracks = QLDb.load_all()
 
+    updated = 0
     for track in tracks:
         d = track.to_dict()
 
@@ -164,6 +164,8 @@ def update_play_counts(dryrun, verbose):
         if len(rows) > 1:
             raise ValueError('Multiple delta rows found for %s' % track)
         elif len(rows) > 0:
+            updated += 1
+
             delta = rows[0]['delta_plays']
             if track.play_count is None:
                 track.play_count = delta
@@ -187,6 +189,8 @@ def update_play_counts(dryrun, verbose):
     if not dryrun:
         delta_db.commit()
         delta_db.close()
+
+    print('\n%d tracks updated' % updated)
 
 
 def main():
