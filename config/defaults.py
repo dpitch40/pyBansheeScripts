@@ -19,7 +19,7 @@ QLPlaylistsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'playlists')
 
 # Library backup settings for RunQL.py
 # Number of pre/post backups to maintain
-NumBackups = 5
+NumBackups = 3
 # Directory for backup copies of library
 LibBackupDir = '/data/Music/Backups'
 
