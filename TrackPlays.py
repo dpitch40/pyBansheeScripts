@@ -12,14 +12,19 @@ dropbox = os.environ.get('DROPBOX', None)
 if dropbox:
     delta_db_name = os.path.join(dropbox, 'Music', delta_db_name)
 
-def _make_where_str(track):
+db_keys = ('title', 'artist', 'album', 'dn', 'tn')
+
+def _make_where_str(track, keys=db_keys):
     l = []
-    for key in ('title', 'artist', 'album', 'dn', 'tn'):
-        value = getattr(track, key)
-        if value is None:
-            l.append('%s ISNULL' % key)
+    for key, val_key in zip(db_keys, keys):
+        if val_key is not None:
+            value = getattr(track, key)
+            if value is None:
+                l.append('%s ISNULL' % key)
+            else:
+                l.append('%s = :%s' % (key, val_key))
         else:
-            l.append('%s = :%s' % (key, key))
+            l.append('%s ISNULL' % key)
     return ' AND '.join(l)
 
 def get_db(fname):
@@ -152,6 +157,9 @@ def update_play_counts(dryrun, verbose):
         raise SystemExit
 
     delta_db = get_delta_db(delta_db_name)
+    db = None
+    if os.path.exists(db_name):
+        db = get_db(db_name)
     tracks = QLDb.load_all()
 
     updated = 0
@@ -159,8 +167,18 @@ def update_play_counts(dryrun, verbose):
         d = track.to_dict()
 
         # Check if the delta_plays table has a row for this track
-        rows = delta_db.sql("""SELECT delta_plays, total_plays FROM delta_plays WHERE %s""" %
-                            _make_where_str(track), **d)
+        for val_keys in [('title', 'artist', 'album', 'dn', 'tn'),
+                         ('title', 'album_artist', 'album', 'dn', 'tn'),
+                         ('title', 'artist', 'album', None, 'tn'),
+                         ('title', 'album_artist', 'album', None, 'tn')]:
+            sql = """SELECT delta_plays, total_plays FROM delta_plays WHERE %s""" % \
+                _make_where_str(track, val_keys)
+            if verbose:
+                print(delta_db.preview_sql(sql, **d))
+            rows = delta_db.sql(sql, **d)
+            if len(rows) == 1:
+                break
+
         if len(rows) > 1:
             raise ValueError('Multiple delta rows found for %s' % track)
         elif len(rows) > 0:
@@ -175,7 +193,20 @@ def update_play_counts(dryrun, verbose):
             if not dryrun:
                 track.save()
 
-            sql = 'DELETE FROM delta_plays WHERE %s' % _make_where_str(track)
+            if db:
+                sql = "SELECT play_count AS d FROM plays WHERE %s" % _make_where_str(track, val_keys)
+                if verbose:
+                    print(db.preview_sql(sql, **d))
+                rows = db.sql(sql, **d)
+                if len(rows) > 0:
+                    play_count = rows[0]['play_count']
+                    d['pc'] = play_count + delta
+                    sql = 'UPDATE plays SET play_count = :pc WHERE %s' % _make_where_str(track, val_keys)
+                    if verbose:
+                        print(db.preview_sql(sql, **d))
+                    db.sql(sql, **d)
+
+            sql = 'DELETE FROM delta_plays WHERE %s' % _make_where_str(track, val_keys)
             if verbose:
                 print(delta_db.preview_sql(sql, **d))
             delta_db.sql(sql, **d)
@@ -189,6 +220,9 @@ def update_play_counts(dryrun, verbose):
     if not dryrun:
         delta_db.commit()
         delta_db.close()
+        if db:
+            db.commit()
+            db.close()
 
     print('\n%d tracks updated' % updated)
 
