@@ -192,7 +192,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
             if shell_cmds:
                 print('cp %s %s' % (escape_fname(loc), escape_fname(dest)))
             else:
-                logging.info("Syncing \t%s -> %s\t(%s)" % (loc, dest, reason))
+                logging.info("Syncing \t%s\t(%s)" % (dest, reason))
             if not dryrun:     
                 shutil.copy(track.location, dest)
 

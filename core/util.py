@@ -4,6 +4,7 @@ import os
 import os.path
 import re
 import glob
+import shutil
 from collections.abc import Iterable
 
 from urllib.request import url2pathname, pathname2url
@@ -255,3 +256,30 @@ def convert_str_value(v, convertNumbers=True):
             return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
 
     return v
+
+def run_with_backups(args, file_to_backup, backup_dir, num_backups):
+    prog_name = args[0]
+    if not os.path.isdir(backup_dir):
+        os.makedirs(backup_dir)
+
+    backup_nums = range(num_backups)
+    pre_backup_mtimes = []
+    for i in backup_nums:
+        pre_backup_loc = os.path.join(backup_dir, '%s-backup-%d-pre.db' %
+            (prog_name, i + 1))
+        if not os.path.isfile(pre_backup_loc):
+            backup_num = i
+            break
+        else:
+            pre_backup_mtimes.append((os.path.getmtime(pre_backup_loc), i))
+    else:
+        backup_num = sorted(pre_backup_mtimes)[0][1]
+
+    backup_dest = os.path.join(backup_dir, '%s-backup-%d-pre.db' %
+        (prog_name, backup_num + 1))
+    shutil.copy2(file_to_backup, backup_dest)
+
+    os.spawnvp(os.P_WAIT, prog_name, args[1:])
+
+    shutil.copy2(file_to_backup, os.path.join(backup_dir, '%s-backup-%d-post.db' %
+        (prog_name, backup_num + 1)))
