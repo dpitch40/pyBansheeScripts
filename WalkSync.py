@@ -7,7 +7,9 @@ import operator
 import datetime
 import logging
 import enum
+import glob
 import collections
+import itertools
 from queue import Queue, Empty
 
 import config
@@ -18,8 +20,9 @@ global showSkipped
 
 class Action(enum.Enum):
     SYNC = 0
-    DELETE = 1
-    SKIP = 2
+    UPDATE = 1
+    DELETE = 2
+    SKIP = 3
 
 lame_input_formats = ('.mp3', '.wav')
 
@@ -56,6 +59,36 @@ def get_changes(tracks, changes, synchronous):
                                 group_artists=config.GroupArtistsMedia)
                     for t in tracks]
 
+    # Check for cover art
+    cover_art_dirs = set()
+    art_locs = list()
+    art_dests = list()
+    for track, dest in zip(tracks, dests):
+        if getattr(track, 'singleton', False):
+            continue
+        d = os.path.dirname(track.location)
+        if d not in cover_art_dirs:
+            arts = glob.glob(os.path.join(d, '*.jpg'))
+            if arts:
+                if len(arts) > 1:
+                    for art in arts:
+                        if 'cover' in art.lower():
+                            art_loc = art
+                            break
+                    else:
+                        art_loc = arts[0]
+                else:
+                    art_loc = arts[0]
+                art_base = os.path.basename(art_loc)
+                art_dest = os.path.join(os.path.dirname(dest), art_base)
+
+                art_locs.append(art_loc)
+                art_dests.append(art_dest)
+
+            cover_art_dirs.add(d)
+
+    dests.extend(art_dests)
+
     # Get list of files currently on player
     on_player = list()
     for device in os.listdir(BASE_DIR):# dirsToPlaylistIDs.keys():
@@ -64,22 +97,26 @@ def get_changes(tracks, changes, synchronous):
             for f in filenames:
                 on_player.append(os.path.join(dirpath, f))
     
-    # Handle deletions first
     # Take the set difference of the two sets of filenames
     tosyncnew, common, filestoremove = compare_filesets(dests, on_player)
     logging.debug('%d to sync, %d common, %d to remove' %
         (len(tosyncnew), len(common), len(filestoremove)))
     to_sync_set = set(tosyncnew)
 
+    # Handle deletions first
     for fname in filestoremove:
         if stop_event.is_set():
             return
         put((None, fname, Action.DELETE, None))
 
-    for track, dest in zip(tracks, dests):
+    for track_or_art, dest in zip(itertools.chain(tracks, art_locs), dests):
         if stop_event.is_set():
             return
-        loc = track.location
+        is_art = isinstance(track_or_art, str)
+        if is_art:
+            loc = track_or_art
+        else:
+            loc = track_or_art.location
 
         action, reason = Action.SKIP, None
         
@@ -94,16 +131,17 @@ def get_changes(tracks, changes, synchronous):
 
                 days = (on_disk_stamp - on_player_stamp).days
                 # File on disk has been modified more recently
-                action, reason = Action.SYNC, "File has been modified; %d days newer" % days
+                action, reason = Action.UPDATE, "File has been modified; %d days newer" % days
             elif config.CheckSizes:
                 loc_size = getsize(loc)
                 dest_size = getsize(dest)
                 if loc_size != dest_size:
-                    action, reason = Action.SYNC, 'Sizes do not match: %d != %d' % (loc_size, dest_size)
+                    action, reason = Action.UPDATE, 'Sizes do not match: %d != %d' % (loc_size, dest_size)
         else: # File does not exist on player
             action, reason = Action.SYNC, "Does not exist on player"
-        # print track["Location"], dest, action, reason
-        put((track, dest, action, reason))
+
+        # print loc, dest, action, reason
+        put((loc, dest, action, reason))
     # Sentinel
     put((None, None, None, None))
 
@@ -119,6 +157,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
     synced = 0
     deleted = 0
     skipped = 0
+    updated = 0
 
     dir_sizes = dict()
     created_dirs = set()
@@ -135,17 +174,17 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
             def __iter__(self):
                 while True:
                     try:
-                        track, dest, action, reason = self.q.get(True, 5)
+                        loc, dest, action, reason = self.q.get(True, 5)
                     except Empty:
                         break
                     if action is None:
                         break
 
-                    yield track, dest, action, reason
+                    yield loc, dest, action, reason
 
         itr = Itr(changes)
     
-    for track, dest, action, reason in itr:
+    for loc, dest, action, reason in itr:
 
         dest_dir = os.path.dirname(dest)
         
@@ -176,10 +215,12 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                         logging.error("***ERROR:\tCould not remove %s, it is not empty" % dest_dir)
             deleted += 1
 
-        elif action == Action.SYNC:
-            loc = track.location
+        elif action == Action.SYNC or action == Action.UPDATE:
             if size:
-                size_delta += getsize(loc)
+                if action == Action.SYNC:
+                    size_delta += getsize(loc)
+                else:
+                    size_delta += getsize(loc) - getsize(dest)
 
             if dest_dir not in created_dirs and not os.path.exists(dest_dir):
                 if shell_cmds:
@@ -192,17 +233,24 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
             if shell_cmds:
                 print('cp %s %s' % (escape_fname(loc), escape_fname(dest)))
             else:
-                logging.info("Syncing \t%s\t(%s)" % (dest, reason))
+                if action == Action.SYNC:
+                    logging.info("Syncing \t%s\t(%s)" % (dest, reason))
+                else:
+                    logging.info("Updating \t%s\t(%s)" % (dest, reason))
             if not dryrun:     
-                shutil.copy(track.location, dest)
+                shutil.copy(loc, dest)
 
-            synced += 1
+            if action == Action.SYNC:
+                synced += 1
+            else:
+                updated += 1
         else:
             if showSkipped and not shell_cmds:
                 logging.info("Skipping\t%s\t(%s)" % (dest, reason))
             skipped += 1
 
-    out_str = '%d synced\t%d skipped\t %d deleted' % (synced, skipped, deleted)
+    out_str = '%d synced\t%d updated\t%d skipped\t %d deleted' % \
+            (synced, updated, skipped, deleted)
     if size:
         size_str = "%d" % size_delta
         size_str_mb = "%.2f" % (float(size_delta) / (2 ** 20))
