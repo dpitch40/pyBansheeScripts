@@ -1,5 +1,6 @@
 import requests
 import re
+from datetime import datetime
 
 from bs4 import BeautifulSoup
 
@@ -7,6 +8,8 @@ from .util import parse_time_str, convert_to_tracks
 
 # regex for the domain name of a url
 url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.(com|org|net)")
+
+year_fmts = ['%Y', '%d %b %Y']
 
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -106,8 +109,19 @@ def parse_discogs_tracklist(soup):
     year = None
     for div in profile.find_all('div', class_='head'):
         if next(div.stripped_strings) == 'Released:':
-            year = int(next(div.find_next_sibling('div').stripped_strings))
+            year = next(div.find_next_sibling('div').stripped_strings)
             break
+    if year:
+        for fmt_str in year_fmts:
+            try:
+                year = datetime.strptime(year, fmt_str)
+            except ValueError:
+                pass
+            else:
+                year = year.year
+                break
+        else:
+            year = None
 
     tl_table = soup.find('div', id='tracklist').find('table')
     track_info = list()
