@@ -162,7 +162,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
     dir_sizes = dict()
     created_dirs = set()
 
-    size_delta = 0
+    size_deltas = collections.defaultdict(int)
 
     if synchronous:
         itr = changes
@@ -187,6 +187,8 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
     for loc, dest, action, reason in itr:
 
         dest_dir = os.path.dirname(dest)
+        # Find destination device
+        device = dest[len(config.MediaDir):].strip('/').split('/', 1)[0]
         
         if action == Action.DELETE:
             if shell_cmds:
@@ -200,7 +202,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                 dir_sizes[dest_dir] = len(os.listdir(dest_dir)) - 1
 
             if size:
-                size_delta -= getsize(dest)
+                size_deltas[device] -= getsize(dest)
             if not dryrun:
                 os.remove(dest)
             if dir_sizes[dest_dir] == 0:
@@ -218,9 +220,9 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
         elif action == Action.SYNC or action == Action.UPDATE:
             if size:
                 if action == Action.SYNC:
-                    size_delta += getsize(loc)
+                    size_deltas[device] += getsize(loc)
                 else:
-                    size_delta += getsize(loc) - getsize(dest)
+                    size_deltas[device] += getsize(loc) - getsize(dest)
 
             if dest_dir not in created_dirs and not os.path.exists(dest_dir):
                 if shell_cmds:
@@ -251,14 +253,16 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
 
     out_str = '%d synced\t%d updated\t%d skipped\t %d deleted' % \
             (synced, updated, skipped, deleted)
-    if size:
-        size_str = "%d" % size_delta
-        size_str_mb = "%.2f" % (float(size_delta) / (2 ** 20))
-        if size_delta > 0:
-            size_str = '+' + size_str
-            size_str_mb = '+' + size_str_mb
-        out_str = "%s\t%s bytes (%s MB)" % (out_str, size_str, size_str_mb)
     logging.info(out_str)
+    if size:
+        for device, size_delta in sorted(size_deltas.items()):
+            if size_delta == 0:
+                size_str = '%s: No change' % (device)
+            else:
+                sc = '+' if size_delta > 0 else '-'
+                size_str = "%s: %s%d bytes (%s%.2f MB)" % \
+                    (device, sc, size_delta, sc, float(size_delta) / (2 ** 20))
+            logging.info(size_str)
     stop_event.set()
 
 #------------------------------------------------------------------------------

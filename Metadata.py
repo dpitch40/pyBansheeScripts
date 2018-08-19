@@ -15,8 +15,15 @@ from parse.web import url_re, parse_tracklist_from_url
 
 from match import match_metadata_to_tracks
 
+def copy_args_to_tracks(tracks, extra_args):
+    for track in tracks:
+        for k, v in sorted(extra_args.items()):
+            setattr(track.default_metadata, k, v)
+
 def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
     matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
+
+    copy_args_to_tracks(source_tracks, extra_args)
 
     for source_track, dest_track in matched:
         source_md = source_track
@@ -25,9 +32,6 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
             md = getattr(dest_track, name)
             if md is not None:
                 dest_mds.append((md, name))
-
-        for k, v in sorted(extra_args.items()):
-            setattr(source_md, k, v)
 
         track_changes = dict()
         for md, name in dest_mds:
@@ -68,18 +72,23 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
         DefaultDb().commit()
 
 def copy_metadata(source_tracks, dest_strs, copy_none, reloc, extra_args, test):
+    extra_dests = list()
     for dest_str in dest_strs:
-        print('---\n%s\n---\n' % dest_str)
         if os.path.splitext(dest_str.lower())[1] in tracklist_exts:
-            print('Saving tracks to %s' % (dest_str))
-            if not test:
-                write_tracklist(dest_str, source_tracks)
+            extra_dests.append(dest_str)
         else:
+            print('---\n%s\n---\n' % dest_str)
             dest_tracks, dest_type = parse_metadata_string(dest_str)
             if dest_type == 'web':
                 raise ValueError('Cannot save tracks to a URL')
 
             sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test)
+
+    copy_args_to_tracks(source_tracks, extra_args)
+    for dest_str in extra_dests:
+        print('---\n%s\n---\n\nSaving tracks' % dest_str)
+        if not test:
+            write_tracklist(dest_str, source_tracks)
 
 def parse_metadata_string(s):
     if url_re.match(s):
@@ -88,7 +97,7 @@ def parse_metadata_string(s):
         return tracks, 'web'
 
     default_metadata = None
-    if s.startswith('db:' or 'mfile:'):
+    if s.startswith('db:') or s.startswith('mfile:'):
         default_metadata, s = s.split(':', 1)
     if os.path.exists(s):
         if os.path.isfile(s):
@@ -128,7 +137,7 @@ def main():
 
     extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])
     for t in source_tracks:
-        print(t.format())
+        print(t.format(**extra_args))
 
     if args.rebase:
         raise NotImplementedError

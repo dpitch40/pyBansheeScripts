@@ -1,6 +1,7 @@
 import abc
 import shutil
 import os.path
+import os
 
 from core.file_based import FileBased
 
@@ -36,6 +37,9 @@ class MusicFile(FileBased):
 
     def move(self, new_fname):
         """Moves this MusicFile to a new location."""
+        d = os.path.dirname(new_fname)
+        if not os.path.exists(d):
+            os.makedirs(d)
         shutil.move(self.fname, new_fname)
         self.rebase(new_fname)
 

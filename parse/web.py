@@ -97,6 +97,38 @@ def parse_bandcamp_tracklist(soup):
 
     return convert_to_tracks(track_info, artist=artist, album=album, year=year)
 
+@register_parser('discogs')
+def parse_discogs_tracklist(soup):
+    profile = soup.find('div', class_='profile')
+    artist_span, album_span = profile.find_all('spanitemprop')
+    artist = artist_span['title']
+    album = next(album_span.stripped_strings)
+    year = None
+    for div in profile.find_all('div', class_='head'):
+        if next(div.stripped_strings) == 'Released:':
+            year = int(next(div.find_next_sibling('div').stripped_strings))
+            break
+
+    tl_table = soup.find('div', id='tracklist').find('table')
+    track_info = list()
+    for row in tl_table.find_all('tr'):
+        try:
+            pos = next(row.find('td', class_='tracklist_track_pos').stripped_strings)
+        except StopIteration:
+            continue
+        if '-' in pos:
+            disc_num, _ = pos.split('-')
+            disc_num = int(disc_num)
+        else:
+            disc_num = None
+        title_td = row.find('td', class_='tracklist_track_title')
+        title = next(title_td.stripped_strings)
+        time_td = row.find('meta', itemprop='duration').find_next_sibling('span')
+        time = next(time_td.stripped_strings)
+        track_info.append((title, time, disc_num))
+
+    return convert_to_tracks(track_info, artist=artist, album=album, year=year)
+
 def parse_tracklist_from_url(url):
     domain = url_re.match(url).group(1).lower()
     if domain not in parsers:

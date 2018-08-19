@@ -13,8 +13,9 @@ class FormattingDictLike(abc.ABC):
     def to_dict(self):
         raise NotImplementedError
 
-    def _format_dict(self):
+    def _format_dict(self, **overrides):
         d = self.to_dict()
+        d.update(overrides)
         fd = dict()
         for k, v in d.items():
             formatted = self._format_value(k, v)
@@ -31,8 +32,8 @@ class FormattingDictLike(abc.ABC):
             v = str(v)
         return v
 
-    def format(self):
-        d = self._format_dict()
+    def format(self, **overrides):
+        d = self._format_dict(**overrides)
 
         formatted_lines = []
         for l in self.format_lines:
