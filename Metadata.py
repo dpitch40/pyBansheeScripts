@@ -48,6 +48,9 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
                 for k, v in sorted(changes.items()):
                     print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
 
+        if not test:
+            dest_track.save()
+
         if reloc:
             new_loc = dest_track.default_metadata.calculate_fname()
             if new_loc != dest_track.location:
@@ -56,9 +59,8 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
                     dest_track.db.location = new_loc
                 if not test and dest_track.mfile:
                     dest_track.mfile.move(new_loc)
-
-        if not test:
-            dest_track.save()
+                if not test:
+                    dest_track.save()
 
     if unmatched_sources:
         print()

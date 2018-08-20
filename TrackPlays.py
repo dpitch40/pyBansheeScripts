@@ -185,14 +185,16 @@ def update_play_counts(dryrun, verbose):
             updated += 1
 
             delta = rows[0]['delta_plays']
+            old_play_count = track.play_count
             if track.play_count is None:
                 track.play_count = delta
             else:
                 track.play_count += delta
-            print('%s:\t+%d' % (track, delta))
+            print('%s:\t%s +%d -> %d' % (track, old_play_count, delta, track.play_count))
             if not dryrun:
                 track.save()
 
+            # Update plays database on this machine if it exists
             if db:
                 sql = "SELECT play_count AS d FROM plays WHERE %s" % _make_where_str(track, val_keys)
                 if verbose:
