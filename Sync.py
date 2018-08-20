@@ -8,11 +8,20 @@ import glob
 import re
 import subprocess
 
-import config
+try:
 
-# Set up default directories
-artists_dir = config.MusicDir
-playlists_dir = config.QLPlaylistsLoc
+    import config
+except ImportError:
+    artists_dir = os.path.expanduser(os.path.join('~', 'Music', 'Artists'))
+    playlists_dir = os.path.expanduser(os.path.join('~', '.quodlibet', 'playlists'))
+    media_dir = os.path.join('/media', os.environ.get('USER',
+                    os.environ.get('USERNAME', os.environ.get('LOGNAME', ''))))
+    portable_pls_dir = 'PlaylistsQL'
+else:
+    artists_dir = config.MusicDir
+    playlists_dir = config.QLPlaylistsLoc
+    media_dir = config.MediaDir
+    portable_pls_dir = config.PortablePLsDir
 
 single_char_dir_re = re.compile(r"^([A-Z])(?=%s)" % re.escape(os.sep))
 
@@ -81,7 +90,6 @@ def main():
 
     args = parser.parse_args()
 
-    media_dir = config.MediaDir
     devices = [os.path.join(media_dir, d) for d in os.listdir(media_dir)]
 
     if not os.path.isdir(artists_dir):
@@ -91,7 +99,7 @@ def main():
 
     for dev_dir in devices:
         sync(os.path.join(dev_dir, "MUSIC"), artists_dir, args.test)
-        p_dir = os.path.join(dev_dir, config.PortablePLsDir)
+        p_dir = os.path.join(dev_dir, portable_pls_dir)
         if os.path.isdir(p_dir):
             sync_playlists(p_dir, playlists_dir, args.test)
 

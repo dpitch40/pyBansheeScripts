@@ -16,6 +16,8 @@ BansheeDbLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'ban
 QLSongsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'songs'))
 # Quod Libet playlist file location
 QLPlaylistsLoc = os.path.expanduser(os.path.join('~', '.quodlibet', 'playlists'))
+# Directory to check for playlists on a portable player
+PortablePLsDir = 'PlaylistsQL'
 
 # Library backup settings for RunQL.py
 # Number of pre/post backups to maintain
@@ -61,8 +63,6 @@ AlbumArtistDefault = True
 def DefaultDb():
     from db.ql import QLDb
     return QLDb
-# Directory to check for playlists on a portable player
-PortablePLsDir = 'PlaylistsQL'
 # Default bit rate to encode arbitrary tracks to
 DefaultBitrate = 128
 # Default bit rate to encode CDs to
