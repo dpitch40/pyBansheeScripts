@@ -75,6 +75,7 @@ def save_delta(track, delta, delta_db, verbose):
         # Create a row for this track
         sql = """INSERT INTO delta_plays (title, artist, album, dn, tn, delta_plays, total_plays)
     VALUES (:title, :artist, :album, :dn, :tn, :delta, :play_count)"""
+        print('\t+%d (%d)' % (delta, play_count))
     else:
         # Update the existing row in the delta_plays table for this track; add the existing
         # delta to the new one
@@ -82,10 +83,12 @@ def save_delta(track, delta, delta_db, verbose):
         d['delta'] += current_delta
         sql = """UPDATE delta_plays SET delta_plays = :delta, total_plays = :play_count
     WHERE %s""" % _make_where_str(track)
+        print('\t+%d->+%d (%d->%d)' % (current_delta, d['delta'],
+                                       rows[0]['total_plays'], d['play_count']))
+
     if verbose:
         print(delta_db.preview_sql(sql, **d))
-    else:
-        print('%s:\t+%d' % (track, delta))
+
     delta_db.sql(sql, **d)
 
 def update_db(dryrun, verbose):
@@ -101,6 +104,7 @@ def update_db(dryrun, verbose):
 
     for track in tracks:
         sql = None
+        delta = None
 
         # Check to see if this track is in the plays table
         d = track.to_dict()
@@ -119,31 +123,27 @@ def update_db(dryrun, verbose):
         else:
             # Find the delta--the number of plays since the last time the plays table was updated
             delta = play_count - rows[0]['play_count']
+            if delta:
+                # Update the plays table entry for this track
+                sql = """UPDATE plays SET play_count = :play_count WHERE %s""" % _make_where_str(track)
+                print('%s:\t %d->%d' % (track, rows[0]['play_count'], d['play_count']))
+
             if new_delta and play_count:
                 # If the delta file is newly created, the delta is the play count
-                deltas_to_save.append((track, play_count))
-            elif delta > 0:
-                # Save the delta
-                deltas_to_save.append((track, delta))
-            # Update the plays table entry for this track
-            sql = """UPDATE plays SET play_count = :play_count WHERE %s""" % _make_where_str(track)
+                delta = play_count
+
         # Run SQL
         if sql:
             if verbose:
                 print(db.preview_sql(sql, **d))
             db.sql(sql, **d)
 
+        if delta is not None and delta > 0:
+            save_delta(track, delta, delta_db, verbose)
+
     if not dryrun:
         db.commit()
-
-    # Save deltas if required
-    if deltas_to_save:
-        if verbose:
-            print('\n')
-        for track, delta in deltas_to_save:
-            save_delta(track, delta, delta_db, verbose)
-        if not dryrun:
-            delta_db.commit()
+        delta_db.commit()
 
     delta_db.close()
     db.close()
@@ -232,8 +232,8 @@ def update_play_counts(dryrun, verbose):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--test', action='store_true')
-    parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('-t', '--test', action='store_true', help='Do not execute changes')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Print SQL statements to execute')
     parser.add_argument('action', choices=['up', 'down'])
 
     args = parser.parse_args()
