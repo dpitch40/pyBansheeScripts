@@ -117,9 +117,9 @@ def update_db(dryrun, verbose):
             # If this track doesn't have an entry in the plays table, add it
             sql = """INSERT INTO plays (title, artist, album, dn, tn, play_count) VALUES
     (:title, :artist, :album, :dn, :tn, :play_count)"""
+            print('%s:\t None->%d' % (track, d['play_count']))
             # If the delta file is newly created, the delta is the play count
-            if new_delta and play_count:
-                deltas_to_save.append((track, play_count))
+            delta = play_count
         else:
             # Find the delta--the number of plays since the last time the plays table was updated
             delta = play_count - rows[0]['play_count']

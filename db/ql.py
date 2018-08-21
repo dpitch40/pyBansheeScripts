@@ -24,7 +24,7 @@ class QLSongs(object):
             data = fobj.read()
         songs = load_audio_files(data)
         songs.sort(key=lambda x: (x.get('albumartist', ''), x.get('artist', ''), x.get('album', ''),
-                                  x.get('discnumber', ''), x.get('tracknumber', '')))
+                                  x.get('discnumber', ''), int(x.get('tracknumber', '0').split('/')[0])))
         self._load_indices(songs)
 
         return songs
