@@ -168,8 +168,12 @@ def filter_path_elements(elements):
        containing forward slashes
        basedir is the top-level directory (assumed not to contain forbidden characters)
        elements is the list of path elementst hat may contain slashes; artist, album, title, etc."""
-    # Remove forward slashes in the path elements
-    elements = [element.replace('/', '_') for element in elements]
+    # Remove forward slashes and leading periods in the path elements
+    for i, element in enumerate(elements):
+        element = element.replace('/', '_')
+        if element.startswith('.'):
+            element = '_%s' % element[1:]
+        elements[i] = element
     return filter_fname(os.path.join(*elements))
 
 def excape_xml_chars(s):
