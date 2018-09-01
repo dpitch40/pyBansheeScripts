@@ -1,5 +1,6 @@
 import os.path
 import argparse
+import collections
 
 from config import DefaultDb
 
@@ -20,47 +21,13 @@ def copy_args_to_tracks(tracks, extra_args):
         for k, v in sorted(extra_args.items()):
             setattr(track.default_metadata, k, v)
 
-def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
+def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test):
     matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
 
     copy_args_to_tracks(source_tracks, extra_args)
 
     for source_track, dest_track in matched:
-        source_md = source_track
-        dest_mds = list()
-        for name in ('db', 'mfile'):
-            md = getattr(dest_track, name)
-            if md is not None:
-                dest_mds.append((md, name))
-
-        track_changes = dict()
-        for md, name in dest_mds:
-            md.update(source_md, copy_none=copy_none)
-            changes = md.changes()
-            if changes:
-                track_changes[name] = changes
-
-        print(dest_track.location)
-        if track_changes:
-            for name, changes in sorted(track_changes.items()):
-                md = getattr(dest_track, name)
-                print('    %s' % name)
-                for k, v in sorted(changes.items()):
-                    print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
-
-        if not test:
-            dest_track.save()
-
-        if reloc:
-            new_loc = dest_track.default_metadata.calculate_fname()
-            if new_loc != dest_track.location:
-                print('    Relocating to %s' % new_loc)
-                if dest_track.db:
-                    dest_track.db.location = new_loc
-                if not test and dest_track.mfile:
-                    dest_track.mfile.move(new_loc)
-                if not test:
-                    dest_track.save()
+        sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra_args, test)
 
     if unmatched_sources:
         print()
@@ -73,7 +40,49 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test):
     if not test:
         DefaultDb().commit()
 
-def copy_metadata(source_tracks, dest_strs, copy_none, reloc, extra_args, test):
+def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra_args, test):
+    track_changes = collections.defaultdict(dict)
+    dest_mds = list()
+    for name in ('db', 'mfile'):
+        md = getattr(dest_track, name)
+        if md is not None:
+            dest_mds.append((md, name))
+    source_md = source_track
+
+    if only_db_fields:
+        allowed_fields = MusicDb.db_fields
+    else:
+        allowed_fields = None
+
+    for md, name in dest_mds:
+        md.update(source_md, copy_none=copy_none, allowed_fields=allowed_fields)
+        changes = md.changes()
+        if changes:
+            track_changes[name].update(changes)
+
+    print(dest_track.location)
+    if track_changes:
+        for name, changes in sorted(track_changes.items()):
+            md = getattr(dest_track, name)
+            print('    %s' % name)
+            for k, v in sorted(changes.items()):
+                print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
+
+    if not test:
+        dest_track.save()
+
+    if reloc:
+        new_loc = dest_track.default_metadata.calculate_fname()
+        if new_loc != dest_track.location:
+            print('    Relocating to %s' % new_loc)
+            if dest_track.db:
+                dest_track.db.location = new_loc
+            if not test and dest_track.mfile:
+                dest_track.mfile.move(new_loc)
+            if not test:
+                dest_track.save()
+
+def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, extra_args, test):
     extra_dests = list()
     for dest_str in dest_strs:
         if os.path.splitext(dest_str.lower())[1] in tracklist_exts:
@@ -84,7 +93,7 @@ def copy_metadata(source_tracks, dest_strs, copy_none, reloc, extra_args, test):
             if dest_type == 'web':
                 raise ValueError('Cannot save tracks to a URL')
 
-            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, extra_args, test)
+            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test)
 
     copy_args_to_tracks(source_tracks, extra_args)
     for dest_str in extra_dests:
@@ -122,8 +131,8 @@ def main():
     parser = argparse.ArgumentParser(description=progDesc)
     parser.add_argument("--reloc", action="store_true",
                         help="Relocate files to standard filenames calculate from metadata.")
-    parser.add_argument("--rebase", action='store_true',
-                        help="Change a track's source to the matching location.")
+    parser.add_argument("--only-db-fields", action='store_true',
+                        help="Only copy db-specific fields (play count, rating, etc.).")
     parser.add_argument('-c', '--copy-none', action='store_true')
     parser.add_argument('-t', "--test", action="store_true",
                         help="Only preview changes, do not actually make them.")
@@ -141,17 +150,10 @@ def main():
     for t in source_tracks:
         print(t.format(**extra_args))
 
-    if args.rebase:
-        raise NotImplementedError
-    # fNames, tracks, changes = getTracks(parser, args)
-    # if args.rebase:
-    #     assert len(tracks) == 1, "Can only rebase 1 track at a time"
-    #     assert os.path.exists(args.rebase), "Must rebase to an existing file"
-
     if len(args.dests) > 0:
         print()
         copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc,
-                      extra_args, args.test)
+                      args.only_db_fields, extra_args, args.test)
 
 if __name__ == "__main__":
     main()

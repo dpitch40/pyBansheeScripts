@@ -7,15 +7,16 @@ class MusicDb(FileBased):
 
     sigil = '*'
 
-    all_keys = FileBased.all_keys + ('bitrate',
-                                     'rating',
-                                     'play_count',
-                                     'skip_count',
-                                     'last_played',
-                                     'last_skipped',
-                                     'date_added',
-                                     'location',
-                                     'fsize') # File size in bytes
+    db_fields = ('rating',
+                 'play_count',
+                 'skip_count',
+                 'last_played',
+                 'last_skipped',
+                 'date_added')
+
+    all_keys = FileBased.all_keys + db_fields + ('bitrate',
+                                                 'location',
+                                                 'fsize') # File size in bytes
 
     format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
                     ('tnc', 'dnc', 'year', 'length', 'bitrate', 'fsize', 'rating', 'play_count', 'skip_count'),

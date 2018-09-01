@@ -40,10 +40,12 @@ class Metadata(MappingWrapper, FormattingDictLike):
     def __init__(self, d=None):
         MappingWrapper.__init__(self, d)
 
-    def update_changes(self, other, copy_none=True):
+    def update_changes(self, other, copy_none=True, allowed_fields=None):
         changes = dict()
         for k in self.all_keys:
             if k in self.derived_keys or k in self.read_only_keys:
+                continue
+            if allowed_fields is not None and k not in allowed_fields:
                 continue
             v = getattr(other, k, NOT_FOUND)
             if v is NOT_FOUND:
@@ -57,8 +59,8 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 changes[k] = v
         return changes
 
-    def update(self, other, copy_none=True):
-        self.update_from_dict(self.update_changes(other, copy_none))
+    def update(self, other, copy_none=True, allowed_fields=None):
+        self.update_from_dict(self.update_changes(other, copy_none, allowed_fields))
 
     def update_from_dict(self, d):
         # Reverse sort so dn/tn get set before dc/tc

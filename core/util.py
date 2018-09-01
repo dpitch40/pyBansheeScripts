@@ -253,6 +253,19 @@ def get_fnames(dir_):
     return sorted([os.path.join(dir_, fname) for fname in fnames if
                         os.path.splitext(fname)[1].lower() in allowed_exts])
 
+def get_common_prefix_len(s1, s2):
+    i = 0
+    while s1[:i+1] == s2[:i+1]:
+        i += 1
+    return i
+
+def remove_common_path_elements(path1, path2):
+    sl_split = path1.split(os.sep)
+    dl_split = path2.split(os.sep)
+    cpl = get_common_prefix_len(sl_split, dl_split)
+
+    return os.sep.join(sl_split[cpl:]), os.sep.join(dl_split[cpl:])
+
 # Takes the intersection of two lists of filenames: returns the files exclusive to the first,
 # the common names, and the names exclusive to the second.
 def compare_filesets(filelist1, filelist2, sort=False):

@@ -83,7 +83,9 @@ class Track(FormattingDictLike):
         return d
 
     def __str__(self):
-        return '%s<%s, %s, %s>' % (self.__class__.__name__, self.title, self.artist, self.album)
+        return '%s<%s, %s, %s, %r>' % \
+                (self.__class__.__name__, self.title, self.artist, self.album,
+                 self._default_metadata)
 
     def __repr__(self):
         return pprint.pformat(self.to_dict(False))
