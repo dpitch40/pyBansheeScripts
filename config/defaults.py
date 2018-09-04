@@ -75,6 +75,8 @@ DefaultMetadataSource = 'mfile'
 MP3Qual = 2
 # Default FLAC encoding compression level (0 <= level <= 8; lower is faster, higher is more compressed)
 FlacCompLevel = 5
+# File list extension
+FileListExt = '.fl'
 # Raw file options for encoding/decoding
 RawSigned = 'signed'
 RawBitsPerSample = 16

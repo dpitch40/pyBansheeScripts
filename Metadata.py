@@ -2,6 +2,7 @@ import os.path
 import argparse
 import collections
 
+import config
 from config import DefaultDb
 
 from core.util import convert_str_value, get_fnames
@@ -9,6 +10,7 @@ from core.track import Track
 
 from db.db import MusicDb
 
+from mfile import mapping
 from mfile.mfile import MusicFile
 
 from parse.file import read_tracklist, tracklist_exts, write_tracklist
@@ -85,14 +87,13 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
 def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, extra_args, test):
     extra_dests = list()
     for dest_str in dest_strs:
-        if os.path.splitext(dest_str.lower())[1] in tracklist_exts:
+        dest_tracks, dest_type = parse_metadata_string(dest_str)
+        if dest_type == 'web':
+            raise ValueError('Cannot save tracks to a URL')
+        elif dest_type == 'tracklist':
             extra_dests.append(dest_str)
         else:
             print('---\n%s\n---\n' % dest_str)
-            dest_tracks, dest_type = parse_metadata_string(dest_str)
-            if dest_type == 'web':
-                raise ValueError('Cannot save tracks to a URL')
-
             sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test)
 
     copy_args_to_tracks(source_tracks, extra_args)
@@ -112,7 +113,10 @@ def parse_metadata_string(s):
         default_metadata, s = s.split(':', 1)
     if os.path.exists(s):
         if os.path.isfile(s):
-            if os.path.splitext(s.lower())[1] in tracklist_exts:
+            ext = os.path.splitext(s.lower())[1]
+            if ext == config.FileListExt:
+                fnames = open(s).read().strip().split('\n')
+            elif ext in tracklist_exts:
                 metadatas = read_tracklist(s)
                 tracks = [Track(other=m) for m in metadatas]
                 return tracks, 'tracklist'

@@ -87,21 +87,24 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-t", "--test", action="store_true", help="Only display changes, don't sync any files")
+    parser.add_argument('-p', '--playlists', action='store_true')
 
     args = parser.parse_args()
 
-    devices = [os.path.join(media_dir, d) for d in os.listdir(media_dir)]
 
     if not os.path.isdir(artists_dir):
         os.makedirs(artists_dir)
-    if not os.path.isdir(playlists_dir):
-        os.makedirs(playlists_dir)
+    if args.playlists:
+        if not os.path.isdir(playlists_dir):
+            os.makedirs(playlists_dir)
 
+    devices = [os.path.join(media_dir, d) for d in os.listdir(media_dir)]
     for dev_dir in devices:
         sync(os.path.join(dev_dir, "MUSIC"), artists_dir, args.test)
-        p_dir = os.path.join(dev_dir, portable_pls_dir)
-        if os.path.isdir(p_dir):
-            sync_playlists(p_dir, playlists_dir, args.test)
+        if args.playlists:
+            p_dir = os.path.join(dev_dir, portable_pls_dir)
+            if os.path.isdir(p_dir):
+                sync_playlists(p_dir, playlists_dir, args.test)
 
 if __name__ == "__main__":
     main()
