@@ -103,8 +103,9 @@ def parse_bandcamp_tracklist(soup):
 @register_parser('discogs')
 def parse_discogs_tracklist(soup):
     profile = soup.find('div', class_='profile')
-    artist_span, album_span = profile.find_all('spanitemprop')
-    artist = artist_span['title']
+    itemprops = profile.find_all('spanitemprop')
+    album_span = itemprops[-1]
+    artist = ', '.join([artist_span['title'] for artist_span in itemprops[:-1]])
     album = next(album_span.stripped_strings)
     year = None
     for div in profile.find_all('div', class_='head'):
