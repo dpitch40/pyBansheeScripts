@@ -151,6 +151,9 @@ def main():
 
     args = parser.parse_args()
 
+    if not args.dests and args.reloc:
+        args.dests = [args.source]
+
     source_tracks, source_type = parse_metadata_string(args.source)
 
     extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])

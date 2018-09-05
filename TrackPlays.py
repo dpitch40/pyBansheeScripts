@@ -102,14 +102,17 @@ def update_db(dryrun, verbose):
     delta_db = get_delta_db(delta_db_name)
     deltas_to_save = list()
 
+    rowids_matched = list()
+
     for track in tracks:
         sql = None
         delta = None
+        rowid = None
 
         # Check to see if this track is in the plays table
         d = track.to_dict()
         d['play_count'] = play_count = track.play_count if track.play_count is not None else 0
-        rows = db.sql("""SELECT play_count FROM plays WHERE %s""" % _make_where_str(track), **d)
+        rows = db.sql("""SELECT rowid, play_count FROM plays WHERE %s""" % _make_where_str(track), **d)
 
         if len(rows) > 1:
             raise ValueError('Multiple rows found for %s' % track)
@@ -132,14 +135,32 @@ def update_db(dryrun, verbose):
                 # If the delta file is newly created, the delta is the play count
                 delta = play_count
 
+            rowid = rows[0]['rowid']
+
+        if rowid is not None:
+            rowids_matched.append(rowid)
+
         # Run SQL
         if sql:
             if verbose:
                 print(db.preview_sql(sql, **d))
             db.sql(sql, **d)
+            if sql.startswith('INSERT'):
+                rowids_matched.append(db.sql('SELECT rowid FROM plays WHERE %s' %
+                                        _make_where_str(track), **d)[0]['rowid'])
 
         if delta is not None and delta > 0:
             save_delta(track, delta, delta_db, verbose)
+
+    unmatched_rows =  db.sql("SELECT rowid, title, artist, album, dn, tn FROM plays WHERE rowid NOT IN (%s)" %
+                                ','.join(map(str, rowids_matched)))
+    if unmatched_rows:
+        for row in unmatched_rows:
+            print('Deleting (%(title)s, %(artist)s, %(album)s, %(dn)s, %(tn)s)' % row)
+            sql = 'DELETE FROM plays WHERE rowid = ?'
+            if verbose:
+                print(db.preview_sql(sql, row['rowid']))
+            db.sql(sql, row['rowid'])
 
     if not dryrun:
         db.commit()
