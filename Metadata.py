@@ -61,6 +61,11 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
             track_changes[name].update(changes)
 
     print(dest_track.location)
+    if reloc:
+        new_loc = dest_track.default_metadata.calculate_fname()
+        if new_loc != dest_track.location:
+            track_changes['db']['location'] = new_loc
+
     if track_changes:
         for name, changes in sorted(track_changes.items()):
             md = getattr(dest_track, name)
@@ -71,16 +76,14 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
     if not test:
         dest_track.save()
 
-    if reloc:
-        new_loc = dest_track.default_metadata.calculate_fname()
-        if new_loc != dest_track.location:
-            print('    Relocating to %s' % new_loc)
-            if dest_track.db:
-                dest_track.db.location = new_loc
-            if not test and dest_track.mfile:
-                dest_track.mfile.move(new_loc)
-            if not test:
-                dest_track.save()
+    if reloc and new_loc != dest_track.location:
+        print('    Relocating to %s' % new_loc)
+        if dest_track.db:
+            dest_track.db.location = new_loc
+        if not test and dest_track.mfile:
+            dest_track.mfile.move(new_loc)
+        if not test:
+            dest_track.save()
 
 def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, extra_args, test):
     extra_dests = list()
