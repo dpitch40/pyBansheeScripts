@@ -65,7 +65,7 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
     print(dest_track.location)
     if reloc:
         new_loc = dest_track.default_metadata.calculate_fname()
-        if new_loc != dest_track.location:
+        if new_loc != dest_track.location and 'db' in track_changes:
             track_changes['db']['location'] = new_loc
 
     if track_changes:
