@@ -1,5 +1,7 @@
 import re
 
+from bs4.element import NavigableString
+
 from core.metadata import Metadata
 
 #regex for times
@@ -20,6 +22,7 @@ def parse_time_str(time_str):
 def convert_to_tracks(info_list, **kwargs):
     """Converts a list of (title, length, disc_num) tuples and extra metadata kwargs to a list of
        Metadata objects."""
+    kwargs = dict([(k, str(v) if isinstance(v, NavigableString) else v) for k, v in kwargs.items()])
     disc_num = None
     track_num = 1
     tracks_per_disc = dict()
@@ -34,7 +37,7 @@ def convert_to_tracks(info_list, **kwargs):
         if length is not None:
             length *= 1000
 
-        d = {'title': title,
+        d = {'title': str(title),
              'length': length,
              'tn': track_num,
              'dn': disc_num}

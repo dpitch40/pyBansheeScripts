@@ -150,9 +150,10 @@ def parse_tracklist_from_url(url):
         raise KeyError("No parser defined for domain %r" % domain)
 
     result = None
-    request = requests.get(url, headers=hdr)
+    r = requests.get(url, headers=hdr)
+    r.encoding = 'utf8'
 
-    html = request.text
+    html = r.text
     soup = BeautifulSoup(html, "lxml")
     result = parsers[domain](soup)
 
