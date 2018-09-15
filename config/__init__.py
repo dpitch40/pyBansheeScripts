@@ -15,6 +15,9 @@ BaseDevice = "ROOT"
 SlotNums = {"ROOT": 1}
 
 PlaylistsToSync = {}
+
+DiscogsAppName = ''
+DiscogsUserToken = ''
 """)
     six.print_("config/user.py not defined! Please open the generated file and override "
                "its settings with the correct values.")
