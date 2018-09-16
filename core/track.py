@@ -110,10 +110,12 @@ class Track(FormattingDictLike):
         return cls(other=metadata, **kwargs)
 
     def save(self):
+        mfile_saved, db_saved = False, False
         if self.mfile:
-            self.mfile.save()
+            mfile_saved = self.mfile.save()
         if self.db:
-            self.db.save()
+            db_saved = self.db.save()
+        return mfile_saved, db_saved
 
     def commit(self):
         if self.db:

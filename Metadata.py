@@ -28,8 +28,12 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, ex
 
     copy_args_to_tracks(source_tracks, extra_args)
 
+    mfiles_saved, dbs_saved = 0, 0
     for source_track, dest_track in matched:
-        sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra_args, test)
+        mfile_saved, db_saved = sync_track(source_track, dest_track, copy_none,
+                                           reloc, only_db_fields, extra_args, test)
+        mfiles_saved += mfile_saved
+        dbs_saved += db_saved
 
     if unmatched_sources:
         print()
@@ -39,7 +43,7 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, ex
 
     print('%d/%d matched' % (len(matched), len(source_tracks)))
 
-    if not test:
+    if not test and dbs_saved:
         DefaultDb().commit()
 
 def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra_args, test):
@@ -75,17 +79,18 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
             for k, v in sorted(changes.items()):
                 print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
 
-    if not test:
-        dest_track.save()
-
     if reloc and new_loc != dest_track.location:
         print('    Relocating to %s' % new_loc)
         if dest_track.db:
             dest_track.db.location = new_loc
         if not test and dest_track.mfile:
             dest_track.mfile.move(new_loc)
-        if not test:
-            dest_track.save()
+
+    mfile_saved, db_saved = 0, 0
+    if not test:
+        mfile_saved, db_saved = dest_track.save()
+
+    return int(mfile_saved), int(db_saved)
 
 def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, extra_args, test):
     extra_dests = list()

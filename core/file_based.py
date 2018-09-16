@@ -30,8 +30,10 @@ class FileBased(Metadata):
     def save(self):
         """Copies all current changes over to the staged copy, then writes them to
            the backing file/database."""
+        changes = self.changes()
         self._copy_changes()
-        self._save(self.changes())
+        self._save(changes)
+        return len(changes) > 0
 
     def _save(self, changes):
         """Saves all currently staged changes to the backing file.
