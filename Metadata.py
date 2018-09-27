@@ -79,16 +79,17 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
             for k, v in sorted(changes.items()):
                 print('        %s: %r -> %r' % (k, md.staged.get(k, None), v))
 
-    if reloc and new_loc != dest_track.location:
+    do_relocate = reloc and new_loc != dest_track.location
+    if do_relocate:
         print('    Relocating to %s' % new_loc)
         if dest_track.db:
             dest_track.db.location = new_loc
-        if not test and dest_track.mfile:
-            dest_track.mfile.move(new_loc)
 
     mfile_saved, db_saved = 0, 0
     if not test:
         mfile_saved, db_saved = dest_track.save()
+        if do_relocate and dest_track.mfile:
+            dest_track.mfile.move(new_loc)
 
     return int(mfile_saved), int(db_saved)
 
