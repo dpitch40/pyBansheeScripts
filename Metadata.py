@@ -119,6 +119,7 @@ def parse_metadata_string(s):
     default_metadata = None
     if s.startswith('db:') or s.startswith('mfile:'):
         default_metadata, s = s.split(':', 1)
+
     if os.path.exists(s):
         if os.path.isfile(s):
             ext = os.path.splitext(s.lower())[1]
@@ -132,6 +133,8 @@ def parse_metadata_string(s):
                 fnames = [s]
         else: # Directory
             fnames = get_fnames(s)
+    elif s.lower().endswith(tracklist_exts):
+        return None, 'tracklist'
     else: # Could be a glob
         fnames = get_fnames(s)
 
