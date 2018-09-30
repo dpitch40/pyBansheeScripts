@@ -460,10 +460,14 @@ def genXSPFPlaylist(p_name, p_tracks, base_dir, group_artists):
 """
     return fmt_str % fmt_dict
 
+def backupPlaylist(p_name, p_tracks, base_dir, group_artists):
+    return '%s\n' % '\n'.join([t.location for t in p_tracks])
+
 playlist_gens_by_ext = {'': genQLPlaylist,
                         ".m3u": genM3UPlaylist,
                         ".m3u8": genM3U8Playlist,
-                        ".xspf": genXSPFPlaylist}
+                        ".xspf": genXSPFPlaylist,
+                        '.bkp': backupPlaylist}
 
 def sync_playlists(dryrun):
     # Mapping from destination playlist filenames to contents

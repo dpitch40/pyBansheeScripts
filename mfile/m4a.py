@@ -1,4 +1,5 @@
 import subprocess
+from datetime import datetime
 
 from mutagen.mp4 import MP4
 
@@ -24,7 +25,22 @@ class M4AFile(MutagenFile):
     def mutagen_class(self, fname):
         return MP4(fname)
 
-    year = int_descriptor('\xa9day')
+    @property
+    def year(self):
+        raw = self.get_item('\xa9day')
+        try:
+            return int(raw)
+        except ValueError:
+            return datetime.strptime(raw, '%Y-%m-%dT%H:%M:%SZ').year
+        return int(self.get_item('\xa9day'))
+
+    @year.setter
+    def year(self, value):
+        self.set_item('\xa9day', str(value))
+
+    @year.deleter
+    def year(self):
+        self.del_item('\xa9day')
 
     @property
     def tn(self):

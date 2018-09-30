@@ -72,7 +72,7 @@ def match_metadata_to_files(fnames, metadatas, use_db=False):
     return match_metadata_to_tracks(tracks, metadatas)
 
 def match_metadata_to_tracks(tracks, metadatas):
-    tracks.sort(key=sort_key())
+    # tracks.sort(key=sort_key())
 
     track_mapping = _create_track_mapping(tracks)
     # print('\n'.join(sorted(map(str, track_mapping.keys()))))

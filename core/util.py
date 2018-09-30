@@ -93,7 +93,10 @@ def make_numcount_descriptors(numname, countname, fieldname, alttotal=''):
         try:
             count = self.get_item(alttotal)
             if count is not None:
-                return int(self.get_item(fieldname)), int(count)
+                try:
+                    return int(self.get_item(fieldname)), int(count)
+                except ValueError:
+                    pass
             numcount = self.get_item(fieldname)
             if '/' in numcount:
                 num, count = numcount.split('/')
@@ -290,30 +293,48 @@ def boolean_diff(l1, l2, transform=lambda x: x, sort=False):
         return on1not2, common, on2not1
 
 
-
-def run_with_backups(args, file_to_backup, backup_dir, num_backups):
-    prog_name = args[0]
-    if not os.path.isdir(backup_dir):
-        os.makedirs(backup_dir)
-
-    backup_nums = range(num_backups)
+def get_oldest_backup(backup_dir, pattern, num_backups):
     pre_backup_mtimes = []
-    for i in backup_nums:
-        pre_backup_loc = os.path.join(backup_dir, '%s-backup-%d-pre.db' %
-            (prog_name, i + 1))
+    d = {'p': 'pre'}
+
+    for i in range(num_backups):
+        d['num'] = i + 1
+        pre_backup_loc = os.path.join(backup_dir, pattern % d)
+
         if not os.path.isfile(pre_backup_loc):
-            backup_num = i
-            break
+            return i
         else:
             pre_backup_mtimes.append((os.path.getmtime(pre_backup_loc), i))
     else:
-        backup_num = sorted(pre_backup_mtimes)[0][1]
+        return sorted(pre_backup_mtimes)[0][1]
 
-    backup_dest = os.path.join(backup_dir, '%s-backup-%d-pre.db' %
-        (prog_name, backup_num + 1))
-    shutil.copy2(file_to_backup, backup_dest)
+def copy_files(patterns, backup_dir, p):
+    d = {'p': p}
+    for fname, pattern, backup_num in patterns:
+        d['num'] = backup_num + 1
+        dest = os.path.join(backup_dir, pattern % d)
+        # print('%s -> %s' % (fname, dest))
+        shutil.copy(fname, dest)
 
+def run_with_backups(args, backup_mapping, num_backups):
+    pattern_mapping = defaultdict(list)
+    for mask, backup_dir in backup_mapping.items():
+        if not os.path.isdir(backup_dir):
+            os.makedirs(backup_dir)
+
+        fnames = glob.glob(mask)
+        for fname in glob.iglob(mask):
+            _, fbase = os.path.split(fname)
+            base, ext = os.path.splitext(fbase)
+            pattern ='%s-backup-%%(num)d-%%(p)s%s' % (base.replace('%', '%%'), ext)
+            backup_num = get_oldest_backup(backup_dir, pattern, num_backups)
+            pattern_mapping[backup_dir].append((fname, pattern, backup_num))
+
+    for backup_dir, patterns in pattern_mapping.items():
+        copy_files(patterns, backup_dir, 'pre')
+
+    prog_name = args[0]
     os.spawnvp(os.P_WAIT, prog_name, args[1:])
 
-    shutil.copy2(file_to_backup, os.path.join(backup_dir, '%s-backup-%d-post.db' %
-        (prog_name, backup_num + 1)))
+    for backup_dir, patterns in pattern_mapping.items():
+        copy_files(patterns, backup_dir, 'post')
