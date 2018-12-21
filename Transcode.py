@@ -20,6 +20,9 @@ from core.track import Track
 http_re = re.compile(r'^https?://', flags=re.IGNORECASE)
 
 def convert(infile, outfile, metadata, out_ext, bitrate):
+    # Sanity check for bitrate
+    if bitrate > 2000:
+        bitrate //= 1000
     in_md = open_music_file(infile)
     decoder = in_md.create_decoder()
 

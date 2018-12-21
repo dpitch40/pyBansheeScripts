@@ -31,7 +31,7 @@ by rows of track data."""
         else:
             artist, album, year = metadata_row
             genre = None
-        year = int(year)
+        year = int(year) if year != '' else None
         track_info = list()
         for row in reader:
             title = row[0]
