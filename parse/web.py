@@ -142,7 +142,7 @@ def parse_discogs_tracklist(soup):
             disc_num = None
         title_td = row.find('td', class_='tracklist_track_title')
         title = next(title_td.stripped_strings)
-        time_td = row.find('meta', itemprop='duration').find_next_sibling('span')
+        time_td = row.find('td', class_='tracklist_track_duration').find('span')
         time = next(time_td.stripped_strings)
         track_info.append((title, time, disc_num))
 
