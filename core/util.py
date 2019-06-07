@@ -5,9 +5,12 @@ import os.path
 import re
 import glob
 import shutil
+import string
 from collections.abc import Iterable
 
 from urllib.request import url2pathname, pathname2url
+
+import config
 
 forbidden_fname_chars = ':;\\!?*"<>|'
 xmlEscapedChars = "'"
@@ -146,6 +149,16 @@ def generate_disc_lens(metadatas):
             return None # All of the tracks must have metadata
     return disc_lens
 
+def get_sort_char(name):
+    for word in config.IgnoreWords:
+        if name.lower().startswith(word + ' '):
+            name = name[len(word) + 1:]
+    first_char = name[0]
+    if first_char in string.ascii_letters:
+        first_char = first_char.upper()
+    else:
+        first_char = '0'
+    return first_char
 
 # Filename escaping/conversion
 

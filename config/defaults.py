@@ -50,7 +50,8 @@ GroupArtists = False
 # Group artists when syncing to a portable media player
 GroupArtistsMedia = True
 # List of words to ignore at the beginning of artist names when grouping artists
-IgnoreWords = ['The']
+# Lowercased
+IgnoreWords = ['the']
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
 GroupSingletons = True

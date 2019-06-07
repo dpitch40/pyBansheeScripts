@@ -1,11 +1,10 @@
 import pprint
 import os.path
-import string
 
 import config
 from core.mw import MappingWrapper
 from core.fd import FormattingDictLike
-from core.util import filter_path_elements, value_is_none
+from core.util import filter_path_elements, value_is_none, get_sort_char
 
 NOT_FOUND = object()
 
@@ -104,15 +103,7 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
         singleton = getattr(self, 'singleton', False) and config.GroupSingletons
         if group_artists and not singleton:
-            sort_artist = artist
-            for word in config.IgnoreWords:
-                if sort_artist.startswith(word + ' '):
-                    sort_artist = sort_artist[len(word) + 1:]
-            first_char = sort_artist[0]
-            if first_char in string.ascii_letters:
-                first_char = first_char.upper()
-            else:
-                first_char = '0'
+            first_char = get_sort_char(artist)
             base_dir = os.path.join(base_dir, first_char)
 
         if singleton:
