@@ -1,4 +1,5 @@
 import os.path
+import getpass
 
 # Directory config variables - override these to be correct for your machine!
 
@@ -7,9 +8,9 @@ CDDriveLoc = "/run/user/1000/gvfs/cdda:host=sr0/"
 # Top-level directory in which the user's music is stored
 MusicDir = "/path/to/your/music/collection"
 # Directory in which connected media devices show up
-MediaDir = "/media/user_name"
-# Name of the device in which playlists are stored
-BaseDevice = "ROOT"
+MediaDir = os.path.join('/media', getpass.getuser())
+# Names of devices in which playlists are stored
+BaseDevices = ["ROOT"]
 # Banshee DB location
 BansheeDbLoc = os.path.expanduser(os.path.join('~', '.config', 'banshee-1', 'banshee.db'))
 # Quod Libet songs file location
@@ -28,9 +29,9 @@ LibBackupDir = '/data/Music/Backups'
 
 # Playlists to sync - override to suit your tastes
 
-# Mapping from playlist names to (Device name, sort order, protocols) tuples
+# Mapping from playlist names to (Device names, sort order, protocols) tuples
 PlaylistsToSync = {
-  "Playlist_Name_In_Banshee": ("ROOT", ['album_artist', 'album', 'dn', 'tn'],
+  "Playlist_Name_In_Banshee": (["ROOT"], ['album_artist', 'album', 'dn', 'tn'],
                                 ('', ".m3u8", "/path/to/music", False)),
 }
 # Device order in which to load playlists--tracks existing on multiple playlists across

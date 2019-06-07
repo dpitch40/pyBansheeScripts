@@ -30,7 +30,15 @@ stop_event = threading.Event()
 
 PLAYLISTS_TO_SYNC = config.PlaylistsToSync
 BASE_DIR = config.MediaDir
-BASE_DEVICE = config.BaseDevice
+CONNECTED_DEVICES  = set(os.listdir(BASE_DIR))
+for device in config.BaseDevices:
+    if device in CONNECTED_DEVICES:
+        BASE_DEVICE = device
+        break
+else:
+    print("No base device (can be %s) found. Make sure one is connected." %
+          ', '.join(config.BaseDevice))
+    sys.exit(1)
 
 loc_sizes = dict()
 def getsize(f):
@@ -273,78 +281,28 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
 # Initialization
 #------------------------------------------------------------------------------
 
-# Returns a set containing TrackIDs of singleton tracks
-# def findSingletons(db, playlist, rows, albumArtists):
-#     singletons = set()
-#     playlistID = playlist["PlaylistID"]
-#     if playlist["Smart"]:
-#         pl = "Smart"
-#     else:
-#         pl = ''
-
-#     fullArtists = set()
-#     # countByAlbumArtist = dict()
-#     for albumArtistID, albumIDs in sorted(albumArtists.items()):
-#         c = 0
-#         for albumID in albumIDs:
-#             # Get info on all the tracks in this album and in the playlist
-#             byTrackInfo = db.sql("""SELECT ct.TrackID, ct.TrackCount, ct.Disc, ct.DiscCount
-# FROM CoreTracks ct JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID
-# WHERE ct.AlbumID = ? AND cpe.%sPlaylistID = ?""" % (pl, pl), albumID, playlistID)
-#             c += len(byTrackInfo)
-
-#             # Get album title
-#             # title = db.sql("SELECT Title from CoreAlbums where AlbumID = ?",
-#             #                 (albumID,))[0]["Title"]
-
-#             # full = False
-#             for r in byTrackInfo:
-#                 disc = r["Disc"]
-#                 tc = r["TrackCount"]
-#                 dc = r["DiscCount"]
-#                 # If multiple discs, select just this track's disc
-#                 if not dc:
-#                     where = "ct.AlbumID = ? AND cpe.%sPlaylistID = ?" % pl
-#                     args = (albumID, playlistID)
-#                 else:
-#                     where = "ct.AlbumID = ? AND ct.Disc = ? AND cpe.%sPlaylistID = ?" % pl
-#                     args = (albumID, disc, playlistID)
-#                 # Check how many songs from this disc are in the playlist
-#                 discCountOnPL = db.sql("""SELECT COUNT(*) as c FROM CoreTracks ct
-# JOIN Core%sPlaylistEntries cpe ON cpe.TrackID = ct.TrackID WHERE %s""" % (pl, where), *args)[0]['c']
-
-#                 # Consider this album a "full album" if any of its discs has all its tracks
-#                 # represented in the playlist, or it if the count is "close enough")
-#                 if tc > 0 and (discCountOnPL == tc or
-#                     (discCountOnPL >= 8 and discCountOnPL + 4 >= tc) or
-#                     (discCountOnPL >= 4 and discCountOnPL + 1 >= tc)):
-#                     # fullDiscs.add((albumID, disc, title))
-#                     # This artist has at least one "full" disc
-#                     fullArtists.add(albumArtistID)
-#                     break
-
-#         # countByAlbumArtist[albumArtistID] = c
-#         if c >= 5 and albumArtistID not in fullArtists:
-#             fullArtists.add(albumArtistID)
-#             # fullArtists |= set(albumIDs)
-
-#     for r in rows:
-#         if r['AlbumArtistID'] not in fullArtists:
-#             singletons.add(r["TrackID"])
-
-#     return singletons
+def should_sync_playlist(p_name):
+    if p_name not in PLAYLISTS_TO_SYNC:
+        return False
+    for device in PLAYLISTS_TO_SYNC[p_name][0]:
+        if device in CONNECTED_DEVICES:
+            return True
+    return False
 
 def add_extra_track_data(playlists):
     all_tracks = list()
 
-    p_names_to_sync = sorted([k for k in playlists.keys() if k in PLAYLISTS_TO_SYNC],
-        key=lambda x: (config.DeviceOrder.index(PLAYLISTS_TO_SYNC[x][0]), x))
+    p_names_to_sync = sorted([p for p in playlists.keys() if
+                              should_sync_playlist(p)],
+        key=lambda p: (config.DeviceOrder.index(PLAYLISTS_TO_SYNC[p][0][0]), p))
+
     for p_name in p_names_to_sync:
         p_tracks = playlists[p_name]
         logging.debug('Found playlist %s, containing %d tracks', p_name, len(p_tracks))
         for track in p_tracks:
             if not hasattr(track, 'device'):
-                device, _, _ = PLAYLISTS_TO_SYNC[p_name]
+                devices, _, _ = PLAYLISTS_TO_SYNC[p_name]
+                device = [d for d in devices if d in CONNECTED_DEVICES][0]
                 track.device = device
                 all_tracks.append(track)
 
@@ -478,7 +436,7 @@ def sync_playlists(dryrun):
     playlists = config.DefaultDb().load_playlists()
     all_tracks = add_extra_track_data(playlists)
     for p_name, p_tracks in sorted(playlists.items()):
-        if not p_tracks:
+        if not p_tracks or not should_sync_playlist(p_name):
             continue
         if p_name in PLAYLISTS_TO_SYNC:
             _, sort_order, protocols = PLAYLISTS_TO_SYNC[p_name]

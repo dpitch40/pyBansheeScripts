@@ -9,10 +9,7 @@ if not os.path.exists(dest):
 """# Override any of the values in defaults.py here
 
 MusicDir =
-MediaDir =
-BaseDevice = "ROOT"
-# Mappings from device names to slot numbers
-SlotNums = {"ROOT": 1}
+BaseDevices = ["ROOT"]
 
 PlaylistsToSync = {}
 
