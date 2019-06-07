@@ -18,7 +18,7 @@ PATHNAME_CHARS = "~!@$&*()-_=+:',."
 initial_period_re = re.compile(r"^(\.+)")
 tuple_re = re.compile(r"\(([^\)]+)\)")
 
-ts_fmt = '%Y-%m-%d %H:%M%S'
+ts_fmt = '%Y-%m-%d %H:%M:%S'
 
 
 # Descriptor factories for Metadata and its subclasses
@@ -225,17 +225,22 @@ def value_is_none(v):
 def convert_str_value(v, convertNumbers=True):
     if v == '' or v == "None" or v is None:
         return None
-    elif isinstance(v, str) and convertNumbers and v.isdigit():
-        return int(v)
-    else:
-        try:
-            return datetime.strptime(v, ts_fmt)
-        except ValueError:
-            pass
+    elif isinstance(v, str) and convertNumbers:
+        if v.isdigit():
+            return int(v)
+        else:
+            try:
+                return float(v)
+            except ValueError:
+                pass
+    try:
+        return datetime.strptime(v, ts_fmt)
+    except ValueError:
+        pass
 
-        m = tuple_re.match(v)
-        if m:
-            return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
+    m = tuple_re.match(v)
+    if m:
+        return tuple(map(lambda x: convert_str_value(x.strip()), m.group(1).split(',')))
 
     return v
 

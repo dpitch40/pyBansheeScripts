@@ -39,8 +39,16 @@ class QLSongs(object):
                 assert False, "%s contains multiple songs with the filename %s" % (songs_loc, location)
             self._locations_to_songs[location] = song
 
-            artist = song['artist']
-            album = song['album']
+            try:
+                artist = song['artist']
+            except KeyError:
+                print(song['~filename'] + ' lacks an artist tag')
+                continue
+            try:
+                album = song['album']
+            except KeyError:
+                print(song['~filename'] + ' lacks an album tag')
+                continue
             tn = None
             if song.get('tracknumber', ''):
                 tn = song['tracknumber']

@@ -92,7 +92,7 @@ def parse_bandcamp_tracklist(soup):
     track_table = soup.find('table', id='track_table')
     track_info = list()
     disc_num = None
-    for row in track_table.find_all('tr'):
+    for row in track_table.find_all('tr', class_='track_row_view'):
         # TODO: Support multiple discs
         title = next(row.find('span', itemprop='name').stripped_strings)
         time = next(row.find('span', class_='time').stripped_strings)
