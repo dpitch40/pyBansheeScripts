@@ -29,10 +29,14 @@ LibBackupDir = '/data/Music/Backups'
 
 # Playlists to sync - override to suit your tastes
 
-# Mapping from playlist names to (Device names, sort order, protocols) tuples
+# Mapping from playlist names to {device_name: protocols} dicts
 PlaylistsToSync = {
-  "Playlist_Name_In_Banshee": (["ROOT"], ['album_artist', 'album', 'dn', 'tn'],
-                                ('', ".m3u8", "/path/to/music", False)),
+  "Playlist_Name_In_Banshee": {"ROOT": {
+                                "sort_order": ['album_artist', 'album', 'dn', 'tn'],
+                                "folder_suffix": "",
+                                "ext": ".mu38",
+                                "base_dir": "/path/to/music"}
+                              },
 }
 # Device order in which to load playlists--tracks existing on multiple playlists across
 # multiple devices will be synced to the device listed first in this list

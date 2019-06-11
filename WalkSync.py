@@ -68,32 +68,36 @@ def get_changes(tracks, changes, synchronous):
                     for t in tracks]
 
     # Check for cover art
-    cover_art_dirs = set()
+    cover_art_dests = set()
     art_locs = list()
     art_dests = list()
     for track, dest in zip(tracks, dests):
         if getattr(track, 'singleton', False):
             continue
         d = os.path.dirname(track.location)
-        if d not in cover_art_dirs:
-            arts = glob.glob(os.path.join(d, '*.jpg'))
-            if arts:
-                if len(arts) > 1:
-                    for art in arts:
-                        if 'cover' in art.lower():
-                            art_loc = art
-                            break
-                    else:
-                        art_loc = arts[0]
+        dest_dir = os.path.dirname(dest)
+
+        arts = glob.glob(os.path.join(d, '*.jpg')) + \
+               glob.glob(os.path.join(d, '*.jpeg'))
+        if arts:
+            if len(arts) > 1:
+                for art in arts:
+                    if 'cover' in art.lower():
+                        art_loc = art
+                        break
                 else:
                     art_loc = arts[0]
-                art_base = os.path.basename(art_loc)
-                art_dest = os.path.join(os.path.dirname(dest), art_base)
+            else:
+                art_loc = arts[0]
+            art_base = os.path.basename(art_loc)
+            art_dest = os.path.join(dest_dir, art_base)
+            if art_dest in cover_art_dests:
+                continue
 
-                art_locs.append(art_loc)
-                art_dests.append(art_dest)
+            art_locs.append(art_loc)
+            art_dests.append(art_dest)
 
-            cover_art_dirs.add(d)
+            cover_art_dests.add(art_dest)
 
     dests.extend(art_dests)
 
@@ -284,7 +288,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
 def should_sync_playlist(p_name):
     if p_name not in PLAYLISTS_TO_SYNC:
         return False
-    for device in PLAYLISTS_TO_SYNC[p_name][0]:
+    for device in PLAYLISTS_TO_SYNC[p_name].keys():
         if device in CONNECTED_DEVICES:
             return True
     return False
@@ -292,16 +296,19 @@ def should_sync_playlist(p_name):
 def add_extra_track_data(playlists):
     all_tracks = list()
 
+    def sort_key(p):
+        devices = sorted(PLAYLISTS_TO_SYNC[p].keys(), key=config.DeviceOrder.index)
+        return (config.DeviceOrder.index(devices[0]), p)
+
     p_names_to_sync = sorted([p for p in playlists.keys() if
-                              should_sync_playlist(p)],
-        key=lambda p: (config.DeviceOrder.index(PLAYLISTS_TO_SYNC[p][0][0]), p))
+                              should_sync_playlist(p)], key=sort_key)
 
     for p_name in p_names_to_sync:
         p_tracks = playlists[p_name]
         logging.debug('Found playlist %s, containing %d tracks', p_name, len(p_tracks))
         for track in p_tracks:
             if not hasattr(track, 'device'):
-                devices, _, _ = PLAYLISTS_TO_SYNC[p_name]
+                devices = PLAYLISTS_TO_SYNC[p_name].keys()
                 device = [d for d in devices if d in CONNECTED_DEVICES][0]
                 track.device = device
                 all_tracks.append(track)
@@ -337,13 +344,13 @@ def add_extra_track_data(playlists):
                     track.singleton = True
                 continue
 
-    return all_tracks
+    return all_tracks, p_names_to_sync
 
 #------------------------------------------------------------------------------
 # Playlist syncing
 #------------------------------------------------------------------------------
 
-def genM3UPlaylist(p_name, p_tracks, base_dir, group_artists):
+def genM3UPlaylist(p_name, p_tracks, base_dir):
     lines = ["#EXTM3U"]
     call_base_dir = callable(base_dir)
     for track in p_tracks:
@@ -352,10 +359,10 @@ def genM3UPlaylist(p_name, p_tracks, base_dir, group_artists):
         else:
             bd = base_dir
         lines.append("#EXTINF:%d,%s - %s" % (track.length/1000, track.artist, track.title))
-        lines.append(track.calculate_fname(bd, group_artists=group_artists))
+        lines.append(track.calculate_fname(bd, group_artists=config.GroupArtistsMedia))
     return "%s\n" % '\n'.join(lines)
 
-def genM3U8Playlist(p_name, p_tracks, base_dir, group_artists):
+def genM3U8Playlist(p_name, p_tracks, base_dir):
     lines = ["#EXTM3U"]
     call_base_dir = callable(base_dir)
     for track in p_tracks:
@@ -363,11 +370,11 @@ def genM3U8Playlist(p_name, p_tracks, base_dir, group_artists):
             bd = base_dir(track)
         else:
             bd = base_dir
-        lines.append(track.calculate_fname(bd, group_artists=group_artists)
+        lines.append(track.calculate_fname(bd, group_artists=config.GroupArtistsMedia)
                     .replace('/', '\\'))
     return "%s\n" % '\n'.join(lines)
 
-def genQLPlaylist(p_name, p_tracks, base_dir, group_artists):
+def genQLPlaylist(p_name, p_tracks, base_dir):
     lines = []
     call_base_dir = callable(base_dir)
     for track in p_tracks:
@@ -375,10 +382,10 @@ def genQLPlaylist(p_name, p_tracks, base_dir, group_artists):
             bd = base_dir(track)
         else:
             bd = base_dir
-        lines.append(track.calculate_fname(bd, group_artists=group_artists))
+        lines.append(track.calculate_fname(bd, group_artists=config.GroupArtistsMedia))
     return "%s\n" % '\n'.join(lines)
 
-def genXSPFPlaylist(p_name, p_tracks, base_dir, group_artists):
+def genXSPFPlaylist(p_name, p_tracks, base_dir):
     app_data = list()
     track_str_list = list()
     call_base_dir = callable(base_dir)
@@ -387,7 +394,7 @@ def genXSPFPlaylist(p_name, p_tracks, base_dir, group_artists):
             bd = base_dir(track)
         else:
             bd = base_dir
-        loc = track.calculate_fname(bd, group_artists=group_artists)
+        loc = track.calculate_fname(bd, group_artists=config.GroupArtistsMedia)
         xmlLoc = pathname2xml(loc)
         track_strs = ["\t\t<track>"]
         track_str_dict = [("location", xmlLoc),
@@ -418,7 +425,7 @@ def genXSPFPlaylist(p_name, p_tracks, base_dir, group_artists):
 """
     return fmt_str % fmt_dict
 
-def backupPlaylist(p_name, p_tracks, base_dir, group_artists):
+def backupPlaylist(p_name, p_tracks, base_dir):
     return '%s\n' % '\n'.join([t.location for t in p_tracks])
 
 playlist_gens_by_ext = {'': genQLPlaylist,
@@ -434,27 +441,31 @@ def sync_playlists(dryrun):
     p_dirs = list()
 
     playlists = config.DefaultDb().load_playlists()
-    all_tracks = add_extra_track_data(playlists)
-    for p_name, p_tracks in sorted(playlists.items()):
-        if not p_tracks or not should_sync_playlist(p_name):
+    all_tracks, p_names_to_sync = add_extra_track_data(playlists)
+    for p_name in p_names_to_sync:
+        p_tracks = playlists[p_name]
+        if not p_tracks:
             continue
-        if p_name in PLAYLISTS_TO_SYNC:
-            _, sort_order, protocols = PLAYLISTS_TO_SYNC[p_name]
-            for protocol in protocols:
-                protocol_name, p_ext, base_dir, group_artists = protocol
+        for device in PLAYLISTS_TO_SYNC[p_name]:
+            if device in CONNECTED_DEVICES:
+                protocols = PLAYLISTS_TO_SYNC[p_name][device]
+                for protocol in protocols:
+                    sort_order = protocol['sort_order']
+                    p_ext = protocol['ext']
 
-                p_dir = os.path.join(BASE_DIR, BASE_DEVICE, "Playlists%s" % protocol_name)
-                if p_dir not in p_dirs:
-                    p_dirs.append(p_dir)
-                p_dest = os.path.join(p_dir, "%s%s" % (p_name, p_ext))
+                    p_dir = os.path.join(BASE_DIR, BASE_DEVICE,
+                                         "Playlists%s" % protocol['folder_suffix'])
+                    if p_dir not in p_dirs:
+                        p_dirs.append(p_dir)
+                    p_dest = os.path.join(p_dir, "%s%s" % (p_name, p_ext))
 
-                if sort_order:
-                    p_tracks.sort(key=sort_key(*sort_order))
-                p_text = playlist_gens_by_ext[p_ext](p_name, p_tracks,
-                                                     base_dir, group_artists)
+                    if sort_order:
+                        p_tracks.sort(key=sort_key(*sort_order))
+                    p_text = playlist_gens_by_ext[p_ext](p_name, p_tracks,
+                                                         protocol['base_dir'])
 
-                if p_text:
-                    p_texts[p_dest] = p_text
+                    if p_text:
+                        p_texts[p_dest] = p_text
 
     # Get list of playlists already on drive
     cur_playlists = list()
