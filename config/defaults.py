@@ -83,6 +83,8 @@ MP3Qual = 2
 FlacCompLevel = 5
 # File list extension
 FileListExt = '.fl'
+# Extensions for album artwork--lowercase
+ArtExts = ['.jpg', '.bmp', '.png']
 # Raw file options for encoding/decoding
 RawSigned = 'signed'
 RawBitsPerSample = 16

@@ -77,8 +77,8 @@ def get_changes(tracks, changes, synchronous):
         d = os.path.dirname(track.location)
         dest_dir = os.path.dirname(dest)
 
-        arts = glob.glob(os.path.join(d, '*.jpg')) + \
-               glob.glob(os.path.join(d, '*.jpeg'))
+        arts = [os.path.join(d, f) for f in os.listdir(d) if
+                os.path.splitext(f)[1].lower() in config.ArtExts]
         if arts:
             if len(arts) > 1:
                 for art in arts:
