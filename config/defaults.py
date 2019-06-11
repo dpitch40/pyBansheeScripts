@@ -53,6 +53,8 @@ NumberTracks = True
 GroupArtists = False
 # Group artists when syncing to a portable media player
 GroupArtistsMedia = True
+# On synced tracks, change the artist to match the album artist
+SimplifyArtists = False
 # List of words to ignore at the beginning of artist names when grouping artists
 # Lowercased
 IgnoreWords = ['the']

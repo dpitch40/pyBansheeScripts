@@ -12,6 +12,8 @@ import collections
 import itertools
 from queue import Queue, Empty
 
+from mfile import open_music_file
+
 import config
 from core.util import compare_filesets, excape_xml_chars, pathname2xml, sort_key, \
         escape_fname
@@ -253,6 +255,13 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                     logging.info("Updating \t%s\t(%s)" % (dest, reason))
             if not dryrun:     
                 shutil.copy(loc, dest)
+                if config.SimplifyArtists:
+                    metadata = open_music_file(dest)
+                    artist = metadata.artist
+                    album_artist = metadata.album_artist
+                    if album_artist is not None and album_artist != artist:
+                        metadata.artist = album_artist
+                        metadata.save()
 
             if action == Action.SYNC:
                 synced += 1

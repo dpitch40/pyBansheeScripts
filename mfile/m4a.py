@@ -44,7 +44,11 @@ class M4AFile(MutagenFile):
 
     @property
     def tn(self):
-        return self.get_item('trkn')[0]
+        trkn = self.get_item('trkn')
+        if trkn is not None:
+            return trkn[0]
+        else:
+            return None
 
     @tn.setter
     def tn(self, value):
@@ -56,7 +60,11 @@ class M4AFile(MutagenFile):
 
     @property
     def tc(self):
-        return self.get_item('trkn')[1]
+        trkn = self.get_item('trkn')
+        if trkn is not None:
+            return trkn[1]
+        else:
+            return None
 
     @tc.setter
     def tc(self, value):
@@ -117,7 +125,7 @@ def main():
     # m4a.genre = 'Pop/Electronic'
     # m4a.year = 2018
     # m4a.title = 'Heaven/Hell'
-    print(m4a.wrapped)
+    # print(m4a.wrapped)
     print(m4a.format())
     print(repr(m4a))
     print(m4a.calculate_fname())
