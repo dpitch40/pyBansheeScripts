@@ -141,7 +141,7 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     @property
     def album_artist(self):
-        aa = self.get_item(self._map_key('album_artist'))
+        aa = self.get_item('albumartist')
         if aa is None and config.AlbumArtistDefault:
             aa = self.artist
         return aa

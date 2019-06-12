@@ -12,7 +12,7 @@ import collections
 import itertools
 from queue import Queue, Empty
 
-from mfile import open_music_file
+from mfile import open_music_file, mapping as mfile_mapping
 
 import config
 from core.util import compare_filesets, excape_xml_chars, pathname2xml, sort_key, \
@@ -256,12 +256,14 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
             if not dryrun:     
                 shutil.copy(loc, dest)
                 if config.SimplifyArtists:
-                    metadata = open_music_file(dest)
-                    artist = metadata.artist
-                    album_artist = metadata.album_artist
-                    if album_artist is not None and album_artist != artist:
-                        metadata.artist = album_artist
-                        metadata.save()
+                    ext = os.path.splitext(dest)[1].lower()
+                    if ext in mfile_mapping:
+                        metadata = open_music_file(dest)
+                        artist = metadata.artist
+                        album_artist = metadata.album_artist
+                        if album_artist is not None and album_artist != artist:
+                            metadata.artist = album_artist
+                            metadata.save()
 
             if action == Action.SYNC:
                 synced += 1
