@@ -57,8 +57,12 @@ class OggFile(MutagenFile):
         return encoder
 
     year = int_descriptor('date')
-    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber', 'tracktotal')
-    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber', 'disctotal')
+    tn = int_descriptor('tracknumber')
+    tc = int_descriptor('tracktotal')
+    dn = int_descriptor('discnumber')
+    dc = int_descriptor('disctotal')
+    # tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber', 'tracktotal')
+    # dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber', 'disctotal')
 
 def main():
     import sys
