@@ -32,15 +32,23 @@ stop_event = threading.Event()
 
 PLAYLISTS_TO_SYNC = config.PlaylistsToSync
 BASE_DIR = config.MediaDir
-CONNECTED_DEVICES  = set(os.listdir(BASE_DIR))
+CONNECTED_DEVICES_ORDERED = [d for d in config.DeviceOrder if os.path.isdir(
+                             os.path.join(BASE_DIR, d))]
+CONNECTED_DEVICES = set(CONNECTED_DEVICES_ORDERED)
+base_devices = list()
 for device in config.BaseDevices:
     if device in CONNECTED_DEVICES:
-        BASE_DEVICE = device
-        break
-else:
+        base_devices.append(device)
+if not base_devices:
     print("No base device (can be %s) found. Make sure one is connected." %
-          ', '.join(config.BaseDevice))
-    sys.exit(1)
+          ', '.join(config.BaseDevices))
+    raise SystemExit
+elif len(base_devices) > 1:
+    print("Multiple base devices (can be %s) found. Make sure only one is connected." %
+          ', '.join(config.BaseDevices))
+    raise SystemExit
+else:
+    BASE_DEVICE = base_devices[0]
 
 loc_sizes = dict()
 def getsize(f):
@@ -105,7 +113,7 @@ def get_changes(tracks, changes, synchronous):
 
     # Get list of files currently on player
     on_player = list()
-    for device in os.listdir(BASE_DIR):# dirsToPlaylistIDs.keys():
+    for device in CONNECTED_DEVICES_ORDERED:# dirsToPlaylistIDs.keys():
         artistDir = os.path.join(BASE_DIR, device, "MUSIC")
         for dirpath, dirnames, filenames in os.walk(artistDir):
             for f in filenames:
@@ -202,7 +210,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
 
         dest_dir = os.path.dirname(dest)
         # Find destination device
-        device = dest[len(config.MediaDir):].strip('/').split('/', 1)[0]
+        dest_device = dest[len(BASE_DIR):].strip('/').split('/', 1)[0]
         
         if action == Action.DELETE:
             if shell_cmds:
@@ -216,7 +224,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                 dir_sizes[dest_dir] = len(os.listdir(dest_dir)) - 1
 
             if size:
-                size_deltas[device] -= getsize(dest)
+                size_deltas[dest_device] -= getsize(dest)
             if not dryrun:
                 os.remove(dest)
             if dir_sizes[dest_dir] == 0:
@@ -234,9 +242,9 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
         elif action == Action.SYNC or action == Action.UPDATE:
             if size:
                 if action == Action.SYNC:
-                    size_deltas[device] += getsize(loc)
+                    size_deltas[dest_device] += getsize(loc)
                 else:
-                    size_deltas[device] += getsize(loc) - getsize(dest)
+                    size_deltas[dest_device] += getsize(loc) - getsize(dest)
 
             if dest_dir not in created_dirs and not os.path.exists(dest_dir):
                 if shell_cmds:
@@ -278,13 +286,13 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
             (synced, updated, skipped, deleted)
     logging.info(out_str)
     if size:
-        for device, size_delta in sorted(size_deltas.items()):
+        for dest_device, size_delta in sorted(size_deltas.items()):
             if size_delta == 0:
-                size_str = '%s: No change' % (device)
+                size_str = '%s: No change' % (dest_device)
             else:
                 sc = '+' if size_delta > 0 else '-'
                 size_str = "%s: %s%d bytes (%s%.2f MB)" % \
-                    (device, sc, size_delta, sc, float(size_delta) / (2 ** 20))
+                    (dest_device, sc, size_delta, sc, float(size_delta) / (2 ** 20))
             logging.info(size_str)
     stop_event.set()
 
