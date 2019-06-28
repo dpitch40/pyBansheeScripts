@@ -8,7 +8,7 @@ import os.path
 import re
 import collections
 
-from mfile import open_music_file
+from mutagen.oggvorbis import OggVorbis
 
 tc_re = re.compile(r'(\d+)/(\d+)')
 
@@ -24,17 +24,16 @@ def run(directory, test):
             ext = os.path.splitext(fname)[1].lower()
             if ext == '.ogg':
                 path = os.path.join(dirpath, fname)
-                oggfile = open_music_file(path)
-                wrapped = oggfile.wrapped
-                if 'tracknumber' in wrapped:
-                    tracknumber = wrapped['tracknumber'][0]
+                oggfile = OggVorbis(path)
+                if 'tracknumber' in oggfile:
+                    tracknumber = oggfile['tracknumber'][0]
                     m = tc_re.match(tracknumber)
                     if m:
                         tn, tc = m.groups()
                         changes[path] = {'tracknumber': tn,
                                          'tracktotal': tc}
-                if 'discnumber' in wrapped:
-                    discnumber = wrapped['discnumber'][0]
+                if 'discnumber' in oggfile:
+                    discnumber = oggfile['discnumber'][0]
                     m = tc_re.match(discnumber)
                     if m:
                         dn, dc = m.groups()
@@ -46,12 +45,12 @@ def run(directory, test):
                     del changes[path]
                 elif not test:
                     if 'tracknumber' in changes[path]:
-                        wrapped['tracknumber'] = [changes[path]['tracknumber']]
-                        wrapped['tracktotal'] = [changes[path]['tracktotal']]
+                        oggfile['tracknumber'] = [changes[path]['tracknumber']]
+                        oggfile['tracktotal'] = [changes[path]['tracktotal']]
                     if 'discnumber' in changes[path]:
-                        wrapped['discnumber'] = [changes[path]['discnumber']]
-                        wrapped['disctotal'] = [changes[path]['disctotal']]
-                    wrapped.save()
+                        oggfile['discnumber'] = [changes[path]['discnumber']]
+                        oggfile['disctotal'] = [changes[path]['disctotal']]
+                    oggfile.save()
     for path, changes in sorted(changes.items()):
         print(path, '\t', changes)
     # print('\n'.join(sorted(not_changed)))

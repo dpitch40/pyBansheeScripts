@@ -5,6 +5,7 @@ from mutagen.easyid3 import EasyID3
 
 import config
 from mfile.ogg import OggFile
+from core.util import make_numcount_descriptors
 
 """EasyID3 tags:
    ['albumartistsort', 'musicbrainz_albumstatus', 'lyricist', 'musicbrainz_workid', 'releasecountry',
@@ -83,6 +84,9 @@ class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
     @album_artist.deleter
     def album_artist(self):
         self.del_item('albumartistsort')
+
+    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber', 'tracktotal')
+    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber', 'disctotal')
 
 def main():
     import sys

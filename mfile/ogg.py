@@ -33,15 +33,13 @@ class OggFile(MutagenFile):
             if value is not None:
                 tags.extend([arg, str(value)])
         if metadata.tn:
+            tags.extend(['-c', 'tracknumber=%s' % metadata.tn])
             if metadata.tc:
-                tags.extend(['-N', '%d/%d' % metadata.tnc])
-            else:
-                tags.extend(['-N', str(metadata.tn)])
+                tags.extend(['-c', 'tracktotal=%d' % metadata.tc])
         if metadata.dn:
+            tags.extend(['-c', 'discnumber=%s' % metadata.dn])
             if metadata.dc:
-                tags.extend(['-c', 'DISCNUMBER=%d/%d' % metadata.dnc])
-            else:
-                tags.extend(['-C', 'DISCNUMBER=%s' % metadata.dn])
+                tags.extend(['-c', 'disctotal=%d' % metadata.dc])
         for value, arg in [
                            (metadata.album_artist, 'ALBUMARTIST')
                           ]:
@@ -61,8 +59,6 @@ class OggFile(MutagenFile):
     tc = int_descriptor('tracktotal')
     dn = int_descriptor('discnumber')
     dc = int_descriptor('disctotal')
-    # tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber', 'tracktotal')
-    # dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber', 'disctotal')
 
 def main():
     import sys
