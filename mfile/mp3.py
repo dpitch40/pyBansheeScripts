@@ -1,30 +1,28 @@
 import subprocess
 
 from mutagen.mp3 import MP3
-from mutagen.easyid3 import EasyID3
+from mfile.mutagen_wrapper import MutagenFile
 
 import config
-from mfile.ogg import OggFile
-from core.util import make_numcount_descriptors
+from core.util import make_numcount_descriptors, int_descriptor
 
-"""EasyID3 tags:
-   ['albumartistsort', 'musicbrainz_albumstatus', 'lyricist', 'musicbrainz_workid', 'releasecountry',
-    'date', 'performer', 'musicbrainz_albumartistid', 'composer', 'catalognumber', 'encodedby',
-    'tracknumber', 'musicbrainz_albumid', 'album', 'asin', 'musicbrainz_artistid', 'mood', 'copyright',
-    'author', 'media', 'length', 'acoustid_fingerprint', 'version', 'artistsort', 'titlesort',
-    'discsubtitle', 'website', 'musicip_fingerprint', 'conductor', 'musicbrainz_releasegroupid',
-    'compilation', 'barcode', 'performer:*', 'composersort', 'musicbrainz_discid',
-    'musicbrainz_albumtype', 'genre', 'isrc', 'discnumber', 'musicbrainz_trmid', 'acoustid_id',
-    'replaygain_*_gain', 'musicip_puid', 'originaldate', 'language', 'artist', 'title', 'bpm',
-    'musicbrainz_trackid', 'arranger', 'albumsort', 'replaygain_*_peak', 'organization',
-    'musicbrainz_releasetrackid']"""
+"""See https://mutagen.readthedocs.io/en/latest/api/id3_frames.html#id3v2-3-4-frames
+"""
 
-class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
+class MP3File(MutagenFile):
 
     ext = '.mp3'
 
     def mutagen_class(self, fname):
-        return MP3(fname, ID3=EasyID3)
+        return MP3(fname)
+
+    def get_item(self, key):
+        value = super(MutagenFile, self).get_item(key)
+        if value:
+            value = value.text
+            if isinstance(value, list) and value:
+                value = value[0]
+        return value
 
     def create_decoder(self):
         # decoder = subprocess.Popen(['lame', '--decode', '-t', '--mp3input',
@@ -72,21 +70,48 @@ class MP3File(OggFile):  # Inherit from ogg file, just to override a few things
 
     @property
     def album_artist(self):
-        aa = self.get_item('albumartistsort')
-        if aa is None and config.AlbumArtistDefault:
-            aa = self.get_item('artist')
-        return aa
+        choices = [self.get_item('TXXX:QuodLibet::albumartist'),
+                   self.get_item('TSO2')]
+        if config.AlbumArtistDefault:
+            choices.append(self.artist)
+        for c in choices:
+            if c:
+                return c
+        return choices[-1]
 
     @album_artist.setter
     def album_artist(self, value):
-        self.set_item('albumartistsort', value)
+        self.set_item('TXXX:QuodLibet::albumartist', value)
 
     @album_artist.deleter
     def album_artist(self):
-        self.del_item('albumartistsort')
+        self.del_item('TXXX:QuodLibet::albumartist')
+        self.del_item('TSO2')
 
-    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'tracknumber', 'tracktotal')
-    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'discnumber', 'disctotal')
+    tn, tc, tnc = make_numcount_descriptors('tn', 'tc', 'TRCK')
+    dn, dc, dnc = make_numcount_descriptors('dn', 'dc', 'TPOS')
+
+    @property
+    def year(self):
+        return self.get_item('TDRC').year
+
+    @year.setter
+    def year(self):
+        self.set_item('TDRC', value)
+
+    @year.deleter
+    def year(self):
+        self.del_item('TDRC')
+
+    mapping = {'title': 'TIT2',
+               'title_sort': 'TSOT',
+               'artist': 'TPE1',
+               'artist_sort': 'TSO2',
+               'album': 'TALB',
+               'album_sort': 'TSOA',
+               'album_artist_sort': 'TSO2',
+               'genre': 'TCON'}
+
 
 def main():
     import sys
@@ -97,6 +122,10 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
+    if 'APIC:' in mp3.wrapped:
+        del mp3.wrapped['APIC:']
+    if 'APIC:cover' in mp3.wrapped:
+        del mp3.wrapped['APIC:cover']
     print(mp3.wrapped, type(mp3.wrapped))
     print(mp3.format())
     print(repr(mp3))
