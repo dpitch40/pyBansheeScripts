@@ -136,6 +136,9 @@ class QLDb(MusicDb):
 
     @classmethod
     def load_playlists(cls):
+        """Returns: {playlist_name (string):
+                     [QLDb()]}
+        """
         locations_to_tracks = dict()
 
         def _from_file(loc):
