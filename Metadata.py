@@ -1,7 +1,6 @@
 import os.path
 import argparse
 import collections
-
 import config
 from config import DefaultDb
 
@@ -24,7 +23,8 @@ def copy_args_to_tracks(tracks, extra_args):
             setattr(track.default_metadata, k, v)
 
 def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test):
-    matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks)
+    matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks,
+                                                                           True)
 
     copy_args_to_tracks(source_tracks, extra_args)
 

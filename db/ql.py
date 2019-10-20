@@ -2,6 +2,8 @@ import operator
 import os.path
 import os
 import subprocess
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.pardir, 'quodlibet', 'quodlibet')))
 
 from quodlibet.formats import load_audio_files, dump_audio_files
 

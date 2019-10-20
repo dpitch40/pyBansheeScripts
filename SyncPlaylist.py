@@ -50,7 +50,8 @@ def _sync(dests_to_locs, cur_files, delete, test, transcode=None):
                     os.makedirs(album_path)
 
                 loc = dests_to_locs[dest]
-                if transcode is None:
+                if transcode is None or \
+                   os.path.splitext(loc)[1].lower() == '.' + transcode.lower():
                     shutil.copy(loc, dest)
                 else:
                     metadata = Track.from_file(loc, default_metadata='db')

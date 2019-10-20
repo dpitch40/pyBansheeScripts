@@ -1,6 +1,7 @@
 import subprocess
 
 from mutagen.mp3 import MP3
+import mutagen.id3 as id3
 from mfile.mutagen_wrapper import MutagenFile
 
 import config
@@ -8,6 +9,8 @@ from core.util import make_numcount_descriptors, int_descriptor
 
 """See https://mutagen.readthedocs.io/en/latest/api/id3_frames.html#id3v2-3-4-frames
 """
+
+encoding = id3.Encoding.UTF8
 
 class MP3File(MutagenFile):
 
@@ -23,6 +26,13 @@ class MP3File(MutagenFile):
             if isinstance(value, list) and value:
                 value = value[0]
         return value
+
+    def set_item(self, key, value):
+        if key in self.wrapped:
+            self.wrapped[key].text = [value]
+        else:
+            frame = getattr(id3, key)(encoding=encoding, text=[value])
+            self.wrapped[key] = frame
 
     def create_decoder(self):
         # decoder = subprocess.Popen(['lame', '--decode', '-t', '--mp3input',

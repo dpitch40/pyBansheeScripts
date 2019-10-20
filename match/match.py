@@ -12,6 +12,8 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     keys = list()
     album, artist, title, tn, dn = metadata.album, metadata.artist, metadata.title, \
                                     metadata.tn, metadata.dn
+    albumartist = metadata.album_artist
+    albumartist = albumartist.lower() if albumartist else ''
     album = album.lower() if album else ''
     artist = artist.lower() if artist else ''
     title = title.lower() if title else ''
@@ -24,22 +26,36 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
         if tn not in (0, None):
             if dn and disc_lens is not None:
                 keys.append((title, artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((title, albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((title, artist, album, tn, dn))
+            if albumartist != '' and albumartist != artist:
+                keys.append((title, albumartist, album, tn, dn))
             if dn is not None and len(disc_lens) == 1:
                 keys.append((artist, album, tn, None))
-
-
-        keys.append((title, artist, album))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((albumartist, album, tn, None))
 
     if not title or get_all_keys:
-        keys.append('Track#%d' % index)
-
         if tn not in (0, None):
             if dn and disc_lens is not None:
                 keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((artist, album, tn, dn))
+            if albumartist != '' and albumartist != artist:
+                keys.append((albumartist, album, tn, dn))
             if dn is not None and len(disc_lens) == 1:
                 keys.append((artist, album, tn, None))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((albumartist, album, tn, None))
+
+        keys.append('Track#%d' % index)
+
+    if title or get_all_keys:
+        keys.append((title, artist, album))
+        if albumartist != '' and albumartist != artist:
+            keys.append((title, albumartist, album))
 
     return keys
 
@@ -71,7 +87,7 @@ def match_metadata_to_files(fnames, metadatas, use_db=False):
     tracks = [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames]
     return match_metadata_to_tracks(tracks, metadatas)
 
-def match_metadata_to_tracks(tracks, metadatas):
+def match_metadata_to_tracks(tracks, metadatas, order_by_source=False):
     # tracks.sort(key=sort_key())
 
     track_mapping = _create_track_mapping(tracks)
@@ -85,7 +101,7 @@ def match_metadata_to_tracks(tracks, metadatas):
         keys = _extract_keys(metadata, i, metadata_disc_lens, True)
         # print(metadata)
         # for key in keys:
-            # print('\t', key)
+        #     print('\t', key)
         for key in keys:
             if key in track_mapping:
                 matched.append((track_mapping[key], metadata))
@@ -93,6 +109,9 @@ def match_metadata_to_tracks(tracks, metadatas):
                 break
         else:
             unmatched_metadatas.append(metadata)
+
+    if order_by_source:
+        matched = sorted(matched, key=lambda x: tracks.index(x[0]))
 
     unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(0), matched)]
 
