@@ -93,3 +93,5 @@ RawBitsPerSample = 16
 RawEndianness = 'big'
 RawChannels = 2
 RawSampleRate = 44100
+# Maximum number of stars a track can be rated
+MaxStars = 5

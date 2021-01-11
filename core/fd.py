@@ -2,6 +2,7 @@ import abc
 import pprint
 
 from core.util import value_is_none
+import config
 
 class FormattingDictLike(abc.ABC):
     sigil = ' '
@@ -77,7 +78,7 @@ class FormattingDictLike(abc.ABC):
         return '%.2fMB' % (fsize / 1000000)
 
     def _format_rating(self, value):
-        return '%d/5' % value
+        return '%d/%d' % (value, config.MaxStars)
 
     def _format_play_count(self, value):
         if value > 1:
