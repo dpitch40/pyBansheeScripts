@@ -344,7 +344,7 @@ def add_extra_track_data(playlists):
             for track in all_tracks:
                 if track.device != device:
                     continue
-                device_artists[track.album_artist].append(track)
+                device_artists[track.album_artist_or_artist].append(track)
 
         for artist, tracks in sorted(device_artists.items()):
             album_disc_track_counts = dict()
@@ -468,18 +468,26 @@ def sync_playlists(dryrun):
         for device in PLAYLISTS_TO_SYNC[p_name]:
             if device in CONNECTED_DEVICES:
                 protocols = PLAYLISTS_TO_SYNC[p_name][device]
+                if isinstance(protocols, dict):
+                    protocols = [protocols]
+
                 for protocol in protocols:
                     sort_order = protocol['sort_order']
+                    sort_reversed = protocol.get('sort_reversed', False)
                     p_ext = protocol['ext']
 
                     p_dir = os.path.join(BASE_DIR, BASE_DEVICE,
                                          "Playlists%s" % protocol['folder_suffix'])
                     if p_dir not in p_dirs:
                         p_dirs.append(p_dir)
-                    p_dest = os.path.join(p_dir, "%s%s" % (p_name, p_ext))
+                    dest_name = protocol.get('dest_name', None)
+                    if not dest_name:
+                        dest_name = p_name
+                    p_dest = os.path.join(p_dir, "%s%s" % (dest_name, p_ext))
 
                     if sort_order:
-                        p_tracks.sort(key=sort_key(*sort_order))
+                        p_tracks.sort(key=sort_key(*sort_order),
+                                      reverse=sort_reversed)
                     p_text = playlist_gens_by_ext[p_ext](p_name, p_tracks,
                                                          protocol['base_dir'])
 
