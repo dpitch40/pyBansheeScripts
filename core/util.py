@@ -133,7 +133,7 @@ sort_key_defaults = {'album_artist': '',
                      'tn': 0}
 def sort_key(*args):
     if len(args) == 0:
-        args = ['album_artist', 'artist', 'album', 'dn', 'tn']
+        args = ['album_artist', 'album', 'dn', 'tn']
     def _inner(track, a=args):
         return tuple([getattr(track, arg) or sort_key_defaults[arg] for arg in a])
     return _inner
