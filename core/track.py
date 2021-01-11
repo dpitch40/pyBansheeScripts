@@ -23,25 +23,25 @@ class Track(FormattingDictLike):
             self._default_metadata = config.DefaultMetadataSource
         else:
             self._default_metadata = default_metadata
+        if self._default_metadata == 'db':
+            self._metadata_ordering = (self.db, self.mfile, self.other)
+        else:
+            self._metadata_ordering = (self.mfile, self.db, self.other)
 
         self.all_keys = list()
-        for metadata in self._metadata_ordering():
+        for metadata in self._metadata_ordering:
             if metadata:
                 self.all_keys.extend([k for k in metadata.all_keys if k not in self.all_keys])
 
-    def _metadata_ordering(self):
-        if self._default_metadata == 'db':
-            return (self.db, self.mfile, self.other)
-        else:
-            return (self.mfile, self.db, self.other)
-
     @property
     def default_metadata(self):
-        m1, m2, m3 = self._metadata_ordering()
+        m1, m2, m3 = self._metadata_ordering
         return m1 or m2 or m3
 
     def __getattr__(self, key):
-        mo = self._metadata_ordering()
+        if key in ('_metadata_ordering', 'all_keys'):
+            return super(Track).__getattr__(key)
+        mo = self._metadata_ordering
         if key in self.all_keys:
             value = None
             for metadata in mo:
@@ -60,7 +60,7 @@ class Track(FormattingDictLike):
                 except AttributeError:
                     pass
 
-            return super(Track, self).__getattribute__(key)
+            return super(Track).__getattr__(key)
 
     def to_dict(self, combine=True):
         if True:
@@ -95,17 +95,17 @@ class Track(FormattingDictLike):
         return cls(open_music_file(fname), open_db(fname), **kwargs)
 
     @classmethod
-    def from_metadata(cls, metadata, **kwargs):
+    def from_metadata(cls, metadata, match_to_existing=True, **kwargs):
         if getattr(metadata, 'location', None):
             return cls.from_file(metadata.location, **kwargs)
 
         for ext in mfile_mapping.keys():
             location = metadata.calculate_fname(ext=ext)
-            if os.path.isfile(location):
+            if os.path.isfile(location) and match_to_existing:
                 return cls.from_file(location, other=metadata, **kwargs)
 
         db = db_from_metadata(metadata)
-        if db:
+        if db and match_to_existing:
             return cls(open_music_file(db.location), db, other=metadata, **kwargs)
         return cls(other=metadata, **kwargs)
 
@@ -139,7 +139,16 @@ def main():
 
     track = Track.from_file(sys.argv[1])
     print(track.format())
-    print(repr(track))
+    r1 = repr(track)
+    print(r1)
+
+    # import pickle
+    # by = pickle.dumps(track)
+    # track2 = pickle.loads(by)
+    # print('\nPickled:\n')
+    # r2 = repr(track2)
+    # print(r2)
+    # assert r1 == r2
 
 if __name__ == '__main__':
     main()
