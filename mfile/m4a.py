@@ -28,6 +28,8 @@ class M4AFile(MutagenFile):
     @property
     def year(self):
         raw = self.get_item('\xa9day')
+        if raw is None:
+            return None
         try:
             return int(raw)
         except ValueError:
