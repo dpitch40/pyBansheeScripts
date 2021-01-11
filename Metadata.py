@@ -81,7 +81,10 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
 
     do_relocate = reloc and new_loc != dest_track.location
     if do_relocate:
-        print('    Relocating to %s' % new_loc)
+        message = f'    Relocating to {new_loc}'
+        if os.path.exists(new_loc):
+            message = f'{message} (replacing existing file)'
+        print(message)
         if dest_track.db:
             dest_track.db.location = new_loc
 
