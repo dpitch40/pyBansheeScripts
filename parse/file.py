@@ -40,7 +40,7 @@ by rows of track data."""
                 length = parse_time_str(row[1])
                 if len(row) == 3:
                     discnum = int(row[2])
-            track_info.append((title, length * 1000, discnum))
+            track_info.append((title, None, length * 1000, discnum))
     return convert_to_tracks(track_info, artist=artist, album=album, year=year, genre=genre)
 
 def write_simple_tracklist(fname, tracks):
