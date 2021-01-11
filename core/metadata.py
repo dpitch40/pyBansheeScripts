@@ -146,6 +146,10 @@ class Metadata(MappingWrapper, FormattingDictLike):
             aa = self.artist
         return aa
 
+    @property
+    def album_artist_or_artist(self):
+        return self.get_item('albumartist') or self.artist
+
     @album_artist.setter
     def album_artist(self, value):
         self.set_item('albumartist', value)
