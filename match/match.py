@@ -60,14 +60,14 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     return keys
 
 # Creates mappings from TrackID/(dn, tn)/(title, artist, album) tuples to MP3s
-def _create_track_mapping(tracks):
+def _create_track_mapping(metadatas):
     track_mapping = dict()
     dup_keys = set()
 
     # Make mapping from disc number to number of tracks on the disc
-    disc_lens = generate_disc_lens(tracks)
+    disc_lens = generate_disc_lens(metadatas)
 
-    for i, track in enumerate(tracks):
+    for i, track in enumerate(metadatas):
         possKeys = _extract_keys(track, i, disc_lens, True)
         
         # Ensure each mapping key is unique across all tracks
@@ -87,35 +87,47 @@ def match_metadata_to_files(fnames, metadatas, use_db=False):
     tracks = [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames]
     return match_metadata_to_tracks(tracks, metadatas)
 
-def match_metadata_to_tracks(tracks, metadatas, order_by_source=False):
+def match_metadata_to_tracks(m1, m2, order_by_source=False):
     # tracks.sort(key=sort_key())
 
-    track_mapping = _create_track_mapping(tracks)
+    # Enforce m1 being larger than m2
+    switched = len(m1) < len(m2)
+    track_key = 0
+    if switched:
+        m1, m2 = m2, m1
+        track_key = 1
+
+    track_mapping = _create_track_mapping(m1)
     # print('\n'.join(sorted(map(str, track_mapping.keys()))))
 
     matched = list()
-    unmatched_metadatas = list()
+    unmatched_2 = list()
 
-    metadata_disc_lens = generate_disc_lens(metadatas)
-    for i, metadata in enumerate(sorted(metadatas, key=sort_key())):
+    metadata_disc_lens = generate_disc_lens(m2)
+    for i, metadata in enumerate(sorted(m2, key=sort_key())):
         keys = _extract_keys(metadata, i, metadata_disc_lens, True)
         # print(metadata)
         # for key in keys:
         #     print('\t', key)
         for key in keys:
             if key in track_mapping:
-                matched.append((track_mapping[key], metadata))
+                if switched:
+                    matched.append((metadata, track_mapping[key]))
+                else:
+                    matched.append((track_mapping[key], metadata))
                 # print('--- MATCHED on %s' % str(key))
                 break
         else:
-            unmatched_metadatas.append(metadata)
+            unmatched_2.append(metadata)
 
     if order_by_source:
-        matched = sorted(matched, key=lambda x: tracks.index(x[0]))
+        matched = sorted(matched, key=lambda x: m1.index(x[track_key]))
 
-    unmatched_tracks = [t for t in tracks if t not in map(operator.itemgetter(0), matched)]
+    unmatched_1 = [t for t in m1 if t not in map(operator.itemgetter(track_key), matched)]
 
-    return matched, unmatched_tracks, unmatched_metadatas
+    if switched:
+        unmatched_1, unmatched_2 = unmatched_2, unmatched_1
+    return matched, unmatched_1, unmatched_2
 
 def main():
     parser = argparse.ArgumentParser()
