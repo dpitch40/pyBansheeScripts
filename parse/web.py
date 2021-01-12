@@ -264,5 +264,9 @@ def parse_tracklist_from_url(url):
     return run_parser(url, parsers)
 
 def download_album_art(url, artist, album):
-    art_url = run_parser(url, art_downloaders)
-    _download_art(art_url, artist, album)
+    try:
+        art_url = run_parser(url, art_downloaders)
+    except KeyError:
+        pass
+    else:
+        _download_art(art_url, artist, album)
