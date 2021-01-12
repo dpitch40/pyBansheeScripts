@@ -1,9 +1,14 @@
 import requests
 import re
+import os.path
+from io import BytesIO
 
+from PIL import Image
 from bs4 import BeautifulSoup
 
 from .util import parse_time_str, convert_to_tracks, parse_date_str
+from core.metadata import Metadata
+import config
 
 # regex for the domain name of a url
 url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.(com|org|net)")
@@ -20,6 +25,27 @@ def register_parser(site):
         parsers[site] = func
         return func
     return _inner
+
+art_downloaders = dict()
+def register_art_downloader(site):
+    def _inner(func):
+        art_downloaders[site] = func
+        return func
+    return _inner
+
+def _download_art(url, artist, album):
+    result = requests.get(url)
+    art = Image.open(BytesIO(result.content))
+    w, h = art.size
+    max_dim = max((w, h))
+    if max_dim > config.MaxArtSize:
+        w, h = w * config.MaxArtSize // max_dim, h * config.MaxArtSize // max_dim
+        art = art.resize((w, h))
+    dest_dir = os.path.dirname(Metadata({'album': album, 'artist': artist, 'title': 'a'})
+        .calculate_fname())
+    dest = os.path.join(dest_dir, 'cover.jpg')
+    with open(dest, 'wb') as fobj:
+        art.save(fobj)
 
 @register_parser("metal-archives")
 def parse_ma_tracklist(soup):
@@ -93,12 +119,18 @@ def parse_bandcamp_tracklist(soup):
     disc_num = None
     for row in track_table.find_all('tr', class_='track_row_view'):
         # TODO: Support multiple discs
-        print(row)
         title = next(row.find('span', class_='track-title').stripped_strings)
         time = next(row.find('span', class_='time').stripped_strings)
         track_info.append((title, None, time, disc_num))
 
     return convert_to_tracks(track_info, artist=artist, album=album, year=year)
+
+
+@register_art_downloader('bandcamp')
+@register_art_downloader('silentseason')
+def download_bandcamp_art(soup):
+    # Bonus: download album art
+    return soup.find('div', id='tralbumArt').find('a').attrs['href']
 
 @register_parser('discogs')
 def parse_discogs_tracklist(soup):
@@ -213,9 +245,9 @@ def parse_vgmdb_tracklist(soup):
 
     return convert_to_tracks(tracklist, **kwargs)
 
-def parse_tracklist_from_url(url):
+def run_parser(url, d):
     domain = url_re.match(url).group(1).lower()
-    if domain not in parsers:
+    if domain not in d:
         raise KeyError("No parser defined for domain %r" % domain)
 
     result = None
@@ -224,6 +256,13 @@ def parse_tracklist_from_url(url):
 
     html = r.text
     soup = BeautifulSoup(html, "lxml")
-    result = parsers[domain](soup)
+    result = d[domain](soup)
 
     return result
+
+def parse_tracklist_from_url(url):
+    return run_parser(url, parsers)
+
+def download_album_art(url, artist, album):
+    art_url = run_parser(url, art_downloaders)
+    _download_art(art_url, artist, album)

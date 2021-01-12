@@ -13,7 +13,7 @@ from mfile import mapping
 from mfile.mfile import MusicFile
 
 from parse.file import read_tracklist, tracklist_exts, write_tracklist
-from parse.web import url_re, parse_tracklist_from_url
+from parse.web import url_re, parse_tracklist_from_url, download_album_art
 
 from match import match_metadata_to_tracks
 
@@ -167,6 +167,10 @@ def main():
         args.dests = [args.source]
 
     source_tracks, source_type = parse_metadata_string(args.source)
+    # If relocating, download album art
+    if source_type == 'web' and args.reloc and not args.test:
+        t = source_tracks[0]
+        download_album_art(args.source, t.album_artist_or_artist, t.album)
 
     extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])
     for t in source_tracks:
