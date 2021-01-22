@@ -24,24 +24,20 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
     if title or get_all_keys:
 
         if tn not in (0, None):
-            if dn and disc_lens is not None:
-                keys.append((title, artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
-                if albumartist != '' and albumartist != artist:
-                    keys.append((title, albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((title, artist, album, tn, dn))
             if albumartist != '' and albumartist != artist:
                 keys.append((title, albumartist, album, tn, dn))
             if dn is not None and len(disc_lens) == 1:
-                keys.append((artist, album, tn, None))
+                keys.append((title, artist, album, tn, None))
                 if albumartist != '' and albumartist != artist:
-                    keys.append((albumartist, album, tn, None))
+                    keys.append((title, albumartist, album, tn, None))
+            if dn and disc_lens is not None:
+                keys.append((title, artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((title, albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
 
     if not title or get_all_keys:
         if tn not in (0, None):
-            if dn and disc_lens is not None:
-                keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
-                if albumartist != '' and albumartist != artist:
-                    keys.append((albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
             keys.append((artist, album, tn, dn))
             if albumartist != '' and albumartist != artist:
                 keys.append((albumartist, album, tn, dn))
@@ -49,6 +45,10 @@ def _extract_keys(metadata, index, disc_lens=None, get_all_keys=False):
                 keys.append((artist, album, tn, None))
                 if albumartist != '' and albumartist != artist:
                     keys.append((albumartist, album, tn, None))
+            if dn and disc_lens is not None:
+                keys.append((artist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
+                if albumartist != '' and albumartist != artist:
+                    keys.append((albumartist, album, tn + sum([c for d, c in disc_lens.items() if d < dn])))
 
         keys.append('Track#%d' % index)
 
