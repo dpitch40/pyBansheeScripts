@@ -103,11 +103,11 @@ class MP3File(MutagenFile):
 
     @property
     def year(self):
-        return self.get_item('TDRC').year
+        return int(self.get_item('TDRC').year)
 
     @year.setter
-    def year(self):
-        self.set_item('TDRC', value)
+    def year(self, value):
+        self.set_item('TDRC', str(value))
 
     @year.deleter
     def year(self):
@@ -136,7 +136,7 @@ def main():
         del mp3.wrapped['APIC:']
     if 'APIC:cover' in mp3.wrapped:
         del mp3.wrapped['APIC:cover']
-    print(mp3.wrapped, type(mp3.wrapped))
+    # print(mp3.wrapped, type(mp3.wrapped))
     print(mp3.format())
     print(repr(mp3))
     # mp3.save()
