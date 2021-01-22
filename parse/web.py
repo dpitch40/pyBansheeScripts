@@ -166,18 +166,21 @@ def parse_discogs_tracklist(soup):
             except StopIteration:
                 continue
 
-            if pos.startswith("CD"):
-                disc_num = int(cd_re.match(pos).group(1))
-            elif pos.startswith("DVD"):
+            try:
+                if pos.startswith("CD"):
+                    disc_num = int(cd_re.match(pos).group(1))
+                elif pos.startswith("DVD"):
+                    continue
+                elif '-' in pos:
+                    disc_num, _ = pos.split('-')
+                    disc_num = int(disc_num)
+                elif '.' in pos:
+                    disc_num, _ = pos.split('.')
+                    disc_num = int(disc_num)
+                else:
+                    disc_num = None
+            except ValueError:
                 continue
-            elif '-' in pos:
-                disc_num, _ = pos.split('-')
-                disc_num = int(disc_num)
-            elif '.' in pos:
-                disc_num, _ = pos.split('.')
-                disc_num = int(disc_num)
-            else:
-                disc_num = None
         else:
             disc_num = None
 
