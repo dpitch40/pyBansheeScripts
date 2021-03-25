@@ -19,7 +19,7 @@ xmlEscapedChars = "'"
 PATHNAME_CHARS = "~!@$&*()-_=+:',."
 
 initial_period_re = re.compile(r"^(\.+)")
-tuple_re = re.compile(r"\(([^\)]+)\)")
+tuple_re = re.compile(r"^\(([^\)]+)\)$")
 
 ts_fmt = '%Y-%m-%d %H:%M:%S'
 
@@ -264,7 +264,7 @@ def get_fnames(dir_):
     """Gets a list of music file names in a directory."""
     # Try using glob
     g = glob.glob(dir_)
-    if g != [dir_]:
+    if g and g != [dir_]:
         return sorted(g)
 
     from mfile import mapping as mfile_mapping
