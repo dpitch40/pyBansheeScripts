@@ -20,7 +20,7 @@ class MusicFile(FileBased):
                       'bitrate',
                       'fsize')
 
-    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'performer', 'genre', 'grouping'),
                     ('tnc', 'dnc', 'year', 'length', 'bitrate', 'fsize'),
                     ('location',)]
 

@@ -100,3 +100,6 @@ class FormattingDictLike(abc.ABC):
 
     def _format_last_played(self, value):
         return 'last skipped %s' % value.strftime('%Y-%m-%d %H:%M:%S')
+
+    def _format_grouping(self, value):
+        return f'({value},)'

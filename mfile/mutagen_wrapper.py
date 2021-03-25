@@ -13,6 +13,7 @@ class MutagenFile(MusicFile):
                'album_sort': 'albumsort',
                'artist_sort': 'artistsort',
                'title_sort': 'titlesort'}
+    all_keys = MusicFile.all_keys
 
     def __init__(self, fname):
         if os.path.splitext(fname)[1].lower() != self.ext:

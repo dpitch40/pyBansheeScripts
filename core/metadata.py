@@ -20,7 +20,9 @@ class Metadata(MappingWrapper, FormattingDictLike):
                 'album_sort',
                 'album_artist',
                 'album_artist_sort',
+                'performer',
                 'genre',
+                'grouping',
                 'year', # int,
                 'tn', # int
                 'tc', # int
@@ -33,7 +35,7 @@ class Metadata(MappingWrapper, FormattingDictLike):
 
     derived_keys = {'tnc', 'dnc'}
 
-    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'performer', 'genre', 'grouping'),
                     ('tnc', 'dnc', 'year', 'length')]
 
     def __init__(self, d=None):

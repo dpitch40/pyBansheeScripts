@@ -18,7 +18,7 @@ class MusicDb(FileBased):
                                                  'location',
                                                  'fsize') # File size in bytes
 
-    format_lines = [('title', 'album', 'album_artist', 'artist', 'genre'),
+    format_lines = [('title', 'album', 'album_artist', 'artist', 'performer', 'genre', 'grouping'),
                     ('tnc', 'dnc', 'year', 'length', 'bitrate', 'fsize', 'rating', 'play_count', 'skip_count'),
                     ('date_added', 'last_played', 'last_skipped'),
                     ('location',)]

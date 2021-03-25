@@ -91,7 +91,10 @@ class MP3File(MutagenFile):
 
     @album_artist.setter
     def album_artist(self, value):
-        self.set_item('TXXX:QuodLibet::albumartist', value)
+        try:
+            self.set_item('TXXX:QuodLibet::albumartist', value)
+        except AttributeError:
+            self.set_item('TSO2', value)
 
     @album_artist.deleter
     def album_artist(self):
@@ -113,10 +116,12 @@ class MP3File(MutagenFile):
     def year(self):
         self.del_item('TDRC')
 
-    mapping = {'title': 'TIT2',
+    mapping = {'grouping': 'TIT1',
+               'title': 'TIT2',
                'title_sort': 'TSOT',
                'artist': 'TPE1',
                'artist_sort': 'TSO2',
+               'performer': 'TPE2',
                'album': 'TALB',
                'album_sort': 'TSOA',
                'album_artist_sort': 'TSO2',
@@ -132,11 +137,11 @@ def main():
     # del mp3.album_artist
     # mp3.year = 2010
     # mp3.title = 'A Poem by Yeats'
-    if 'APIC:' in mp3.wrapped:
-        del mp3.wrapped['APIC:']
-    if 'APIC:cover' in mp3.wrapped:
-        del mp3.wrapped['APIC:cover']
-    # print(mp3.wrapped, type(mp3.wrapped))
+    # if 'APIC:' in mp3.wrapped:
+    #     del mp3.wrapped['APIC:']
+    # if 'APIC:cover' in mp3.wrapped:
+    #     del mp3.wrapped['APIC:cover']
+    print(mp3.wrapped, type(mp3.wrapped))
     print(mp3.format())
     print(repr(mp3))
     # mp3.save()
