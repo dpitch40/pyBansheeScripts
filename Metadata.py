@@ -13,25 +13,22 @@ from mfile import mapping
 from mfile.mfile import MusicFile
 
 from parse.file import read_tracklist, tracklist_exts, write_tracklist
-from parse.web import url_re, parse_tracklist_from_url, download_album_art
+from parse.web import url_re, parse_tracklist_from_url, download_album_art, get_art_url
 
 from match import match_metadata_to_tracks
 
-def copy_args_to_tracks(tracks, extra_args):
-    for track in tracks:
-        for k, v in sorted(extra_args.items()):
-            setattr(track.default_metadata, k, v)
-
-def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test):
-    matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks,
-                                                                           True)
-
-    copy_args_to_tracks(source_tracks, extra_args)
+def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, test):
+    if dest_tracks or not reloc:
+        matched, unmatched_sources, unmatched_dests = match_metadata_to_tracks(source_tracks, dest_tracks,
+                                                                               True)
+    else:
+        matched = list(zip(source_tracks[:], source_tracks[:]))
+        unmatched_sources, unmatched_dests = [], []
 
     mfiles_saved, dbs_saved = 0, 0
     for source_track, dest_track in matched:
         mfile_saved, db_saved = sync_track(source_track, dest_track, copy_none,
-                                           reloc, only_db_fields, extra_args, test)
+                                           reloc, only_db_fields, test)
         mfiles_saved += mfile_saved
         dbs_saved += db_saved
 
@@ -46,7 +43,7 @@ def sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, ex
     if not test and dbs_saved:
         DefaultDb().commit()
 
-def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra_args, test):
+def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, test):
     track_changes = collections.defaultdict(dict)
     dest_mds = list()
     for name in ('db', 'mfile'):
@@ -96,8 +93,10 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, extra
 
     return int(mfile_saved), int(db_saved)
 
-def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, extra_args, test):
+def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, test):
     extra_dests = list()
+    if not dest_strs and reloc:
+        sync_tracks(source_tracks, [], copy_none, reloc, only_db_fields, test)
     for dest_str in dest_strs:
         dest_tracks, dest_type = parse_metadata_string(dest_str)
         if dest_type == 'web':
@@ -106,17 +105,19 @@ def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, ex
             extra_dests.append(dest_str)
         else:
             print('---\n%s\n---\n' % dest_str)
-            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, extra_args, test)
+            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, test)
 
-    copy_args_to_tracks(source_tracks, extra_args)
     for dest_str in extra_dests:
         print('---\n%s\n---\n\nSaving tracks' % dest_str)
         if not test:
             write_tracklist(dest_str, source_tracks)
 
-def parse_metadata_string(s):
+def parse_metadata_string(s, domain=None, extra_args=None):
+    if extra_args is None:
+        extra_args = dict()
+
     if url_re.match(s):
-        metadatas = parse_tracklist_from_url(s)
+        metadatas = parse_tracklist_from_url(s, extra_args, domain)
         tracks = [Track(other=m) for m in metadatas]
         return tracks, 'web'
 
@@ -130,7 +131,7 @@ def parse_metadata_string(s):
             if ext == config.FileListExt:
                 fnames = open(s).read().strip().split('\n')
             elif ext in tracklist_exts:
-                metadatas = read_tracklist(s)
+                metadatas = read_tracklist(s, extra_args)
                 tracks = [Track(other=m) for m in metadatas]
                 return tracks, 'tracklist'
             else:
@@ -142,7 +143,11 @@ def parse_metadata_string(s):
     else: # Could be a glob
         fnames = get_fnames(s)
 
-    return [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames], 'files'
+    tracks = [Track.from_file(fname, default_metadata=default_metadata) for fname in fnames]
+    for t in tracks:
+        for arg, v in extra_args.items():
+            setattr(t, arg, v)
+    return tracks, 'files'
 
 def main():
     progDesc = """Copy music metadata from one source to one or more destinations."""
@@ -157,29 +162,39 @@ def main():
                         help="Only preview changes, do not actually make them.")
     parser.add_argument('-e', "--extra", action="append", nargs=2, default=list(),
                         help="Specify extra data fields for tracks loaded from an external source.")
+    parser.add_argument('-d', '--domain', help="Manually set the domain for web parsing")
+    parser.add_argument('-a', '--art', help="URL for album artwork")
     parser.add_argument("source",
         help="The source to get metadata from (db, files, or a location of a track list).")
     parser.add_argument("dests", nargs='*', help="The files being edited, if any.")
 
     args = parser.parse_args()
 
-    if not args.dests and args.reloc:
-        args.dests = [args.source]
-
-    source_tracks, source_type = parse_metadata_string(args.source)
-    # If relocating, download album art
-    if source_type == 'web' and args.reloc and not args.test:
-        t = source_tracks[0]
-        download_album_art(args.source, t.album_artist_or_artist, t.album)
-
     extra_args = dict([(k, convert_str_value(v)) for k, v in args.extra])
-    for t in source_tracks:
-        print(t.format(**extra_args))
+    source_tracks, source_type = parse_metadata_string(args.source, args.domain, extra_args)
 
-    if len(args.dests) > 0:
-        print()
+    for t in source_tracks:
+        print(t.format())
+
+    if len(args.dests) > 0 or args.reloc:
         copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc,
-                      args.only_db_fields, extra_args, args.test)
+                      args.only_db_fields, args.test)
+
+    # If relocating, download album art
+    if source_type == 'web':
+        art_source = args.source
+    elif args.art:
+        art_source = args.art
+    else:
+        art_source = None
+
+    if art_source and (args.reloc or args.art):
+        art_url = get_art_url(art_source)
+        if art_url:
+            print(f'Downloading album art from {art_url}')
+            if not args.test:
+                t = source_tracks[0]
+                download_album_art(art_url, t.album_artist_or_artist, t.album)
 
 if __name__ == "__main__":
     main()

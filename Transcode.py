@@ -45,7 +45,7 @@ def transcode(input_files, oom, bitrate, test):
 
     output_tracks = list()
     if os.path.isfile(oom) or http_re.match(oom):
-        output_tracks = [Track.from_metadata(m, match_to_existing=False) for m in get_track_list(oom)]
+        output_tracks = [Track.from_metadata(m, match_to_existing=False) for m in get_track_list(oom, {})]
     else:
         output_tracks = [Track.from_file(fname, default_metadata='db') for fname in get_fnames(oom)]
 

@@ -95,5 +95,7 @@ RawChannels = 2
 RawSampleRate = 44100
 # Maximum number of stars a track can be rated
 MaxStars = 5
-# If downloading album art, limit it to this size (maximum height or width in pixels)
+# If downloading album art, scale it down it to this size (maximum height or width in pixels)
 MaxArtSize = 800
+# Only download album art if it's at least this size (in pixels)'
+MinArtSize = 400

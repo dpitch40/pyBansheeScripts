@@ -8,7 +8,7 @@ from core.metadata import Metadata
 #regex for times
 time_re = re.compile(r"(\d+):(\d{2})")
 
-year_fmts = ['%Y', '%d %b %Y', '%b %d, %Y', '%b %Y']
+year_fmts = ['%Y', '%d %b %Y', '%b %d, %Y', '%b %Y', '%m/%d/%Y']
 
 def parse_time_str(time_str):
     if not isinstance(time_str, str):
@@ -37,28 +37,36 @@ def convert_to_tracks(info_list, **kwargs):
     """Converts a list of (title, artist, length, disc_num) tuples and extra metadata kwargs to a list of
        Metadata objects."""
     kwargs = dict([(k, str(v) if isinstance(v, NavigableString) else v) for k, v in kwargs.items()])
+    # Fill in artist/album artist
+    album_artist = kwargs.get('albumartist', None) or kwargs['artist']
+    artists = [t.get('artist', None) for t in info_list]
+    if any(artists):
+        if all([a == album_artist for a in artists]):
+            kwargs['artist'] = album_artist
+            kwargs.pop('albumartist', None)
+        else:
+            kwargs['albumartist'] = album_artist
+    else:
+        kwargs['artist'] = album_artist
+        kwargs.pop('albumartist', None)
     disc_num = None
     track_num = 1
     tracks_per_disc = dict()
     tracks = list()
     for track_info in info_list:
-        if track_info[3] != disc_num:
+        dn = track_info.get('dn', None)
+        if dn != disc_num:
             if disc_num is not None:
                 tracks_per_disc[disc_num] = track_num - 1
             track_num = 1
-        title, artist, length, disc_num = track_info
-        length = parse_time_str(length)
+        length = parse_time_str(track_info.get('length', 0))
         if length is not None:
             length *= 1000
 
-        d = {'title': str(title),
-             'length': length,
-             'tn': track_num,
-             'dn': disc_num}
-        if artist:
-            d['artist'] = artist
-        d.update(kwargs)
-        tracks.append(Metadata(d))
+        track_info.update({'length': length,
+                           'tn': track_num})
+        track_info.update(kwargs)
+        tracks.append(Metadata(track_info))
         track_num += 1
 
     tracks_per_disc[disc_num] = track_num - 1
