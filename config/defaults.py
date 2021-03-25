@@ -61,8 +61,12 @@ IgnoreWords = ['the']
 # Group together "singletons" (tracks synced piecemeal rather than as part of a full album)
 # into a single subfolder to avoid cluttering the folder
 GroupSingletons = True
-# Re-sync music files to the player if the size does not match the file on the disc
-CheckSizes = True
+# How thorough to be when syncing music to a player
+# 0 = Do not update existing files, only sync new files and delete
+# 1 = Only update files whose size has changed
+# 2 = Update any files that are newer in the source than in the destination
+# 3 = Update any files whose modification times don't match
+SyncLevel = 2
 # Timestamp format for display
 TsFmt = "%Y-%m-%d %H:%M:%S"
 # album_artist defaults to artist if not specified

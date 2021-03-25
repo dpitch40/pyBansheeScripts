@@ -11,6 +11,10 @@ import glob
 import collections
 import itertools
 from queue import Queue, Empty
+import cProfile
+import pstats
+import time
+import io
 
 from mfile import open_music_file, mapping as mfile_mapping
 
@@ -52,6 +56,7 @@ else:
 
 loc_sizes = dict()
 def getsize(f):
+    # Caching wrapper around os.path.getsize
     if f in loc_sizes:
         return loc_sizes[f]
     else:
@@ -63,7 +68,7 @@ def getsize(f):
 #------------------------------------------------------------------------------
 
 # Threaded function that determines the actions to take with the tracks to sync
-def get_changes(tracks, changes, synchronous):
+def get_changes(tracks, changes, synchronous, limit=None):
     #Populates changes (a Queue) with a series of 4-tuples:
     #track, dest, action, description string
     if synchronous:
@@ -118,7 +123,7 @@ def get_changes(tracks, changes, synchronous):
         for dirpath, dirnames, filenames in os.walk(artistDir):
             for f in filenames:
                 on_player.append(os.path.join(dirpath, f))
-    
+
     # Take the set difference of the two sets of filenames
     tosyncnew, common, filestoremove = compare_filesets(dests, on_player)
     logging.debug('%d to sync, %d common, %d to remove' %
@@ -131,6 +136,7 @@ def get_changes(tracks, changes, synchronous):
             return
         put((None, fname, Action.DELETE, None))
 
+    synced = updated = 0
     for track_or_art, dest in zip(itertools.chain(tracks, art_locs), dests):
         if stop_event.is_set():
             return
@@ -141,34 +147,52 @@ def get_changes(tracks, changes, synchronous):
             loc = track_or_art.location
 
         action, reason = Action.SKIP, None
-        
+
         base, ext = os.path.splitext(dest)
-        
+
         if dest not in to_sync_set:
+            if config.SyncLevel == 0:
+                # Skip updating files
+                continue
+
             on_disk_time = os.path.getmtime(loc)
             on_player_time = os.path.getmtime(dest)
-            if on_disk_time - 5 > on_player_time: # Subtract 5 due to fluctuations
-                on_disk_stamp = datetime.datetime.fromtimestamp(on_disk_time)
-                on_player_stamp = datetime.datetime.fromtimestamp(on_player_time)
+            if config.SyncLevel == 3:
+                if on_disk_time != on_player_time:
+                    action, reason = Action.UPDATE, "Modification times don't match"
+            elif on_disk_time > on_player_time + 5:
+                # Subtract 5 due to fluctuations
+                if config.SyncLevel == 2:
+                    on_disk_stamp = datetime.datetime.fromtimestamp(on_disk_time)
+                    on_player_stamp = datetime.datetime.fromtimestamp(on_player_time)
 
-                days = (on_disk_stamp - on_player_stamp).days
-                # File on disk has been modified more recently
-                action, reason = Action.UPDATE, "File has been modified; %d days newer" % days
-            elif config.CheckSizes:
-                loc_size = getsize(loc)
-                dest_size = getsize(dest)
-                if loc_size != dest_size:
-                    action, reason = Action.UPDATE, 'Sizes do not match: %d != %d' % (loc_size, dest_size)
+                    days = (on_disk_stamp - on_player_stamp).days
+                    # File on disk has been modified more recently
+                    action, reason = Action.UPDATE, "File has been modified; %d days newer" % days
+                else:
+                    # Only sync if the file sizes differ (indicating a non-metadata change)
+                    loc_size = getsize(loc)
+                    dest_size = getsize(dest)
+                    if loc_size != dest_size:
+                        action, reason = Action.UPDATE, \
+                            f'Sizes do not match: {loc_size/(2 ** 20):.2}MB != {dest_size/(2 ** 20):.2}MB'
+            if action is action.update:
+                updated += 1
         else: # File does not exist on player
             action, reason = Action.SYNC, "Does not exist on player"
+            synced += 1
 
         # print loc, dest, action, reason
         put((loc, dest, action, reason))
-    # Sentinel
-    put((None, None, None, None))
+
+        if limit and (synced + updated) >= limit:
+            break
 
     if synchronous:
         return changes
+    else:
+        # Add sentinel
+        changes.put((None, None, None, None))
 
 #------------------------------------------------------------------------------
 # SYNCER THREAD
@@ -194,24 +218,26 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                 self.q = q
 
             def __iter__(self):
+                read = 0
                 while True:
                     try:
-                        loc, dest, action, reason = self.q.get(True, 5)
+                        timeout = 5 if read else None
+                        loc, dest, action, reason = self.q.get(True, timeout)
                     except Empty:
                         break
                     if action is None:
+                        logging.debug('Sentinel reached, stopping')
                         break
-
+                    read += 1
                     yield loc, dest, action, reason
 
         itr = Itr(changes)
-    
-    for loc, dest, action, reason in itr:
 
+    for loc, dest, action, reason in itr:
         dest_dir = os.path.dirname(dest)
         # Find destination device
         dest_device = dest[len(BASE_DIR):].strip('/').split('/', 1)[0]
-        
+
         if action == Action.DELETE:
             if shell_cmds:
                 print('rm %s' % escape_fname(dest))
@@ -262,7 +288,7 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
                 else:
                     logging.info("Updating \t%s\t(%s)" % (dest, reason))
             if not dryrun:     
-                shutil.copy(loc, dest)
+                shutil.copy2(loc, dest)
                 if config.SimplifyArtists:
                     ext = os.path.splitext(dest)[1].lower()
                     if ext in mfile_mapping:
@@ -304,14 +330,6 @@ def track_sync(changes, dryrun, size, shell_cmds, synchronous=False):
 # Initialization
 #------------------------------------------------------------------------------
 
-def should_sync_playlist(p_name):
-    if p_name not in PLAYLISTS_TO_SYNC:
-        return False
-    for device in PLAYLISTS_TO_SYNC[p_name].keys():
-        if device in CONNECTED_DEVICES:
-            return True
-    return False
-
 def add_extra_track_data(playlists):
     all_tracks = list()
 
@@ -319,8 +337,7 @@ def add_extra_track_data(playlists):
         devices = sorted(PLAYLISTS_TO_SYNC[p].keys(), key=config.DeviceOrder.index)
         return (config.DeviceOrder.index(devices[0]), p)
 
-    p_names_to_sync = sorted([p for p in playlists.keys() if
-                              should_sync_playlist(p)], key=sort_key)
+    p_names_to_sync = sorted(playlists.keys(), key=sort_key)
 
     for p_name in p_names_to_sync:
         p_tracks = playlists[p_name]
@@ -459,7 +476,10 @@ def sync_playlists(dryrun):
     # Set of parent directories of the playlists
     p_dirs = list()
 
-    playlists = config.DefaultDb().load_playlists()
+    playlists_to_sync = set([k for k, v in PLAYLISTS_TO_SYNC.items() if
+        set(v.keys()) & CONNECTED_DEVICES])
+
+    playlists = config.DefaultDb().load_playlists(playlists_to_sync)
     all_tracks, p_names_to_sync = add_extra_track_data(playlists)
     for p_name in p_names_to_sync:
         p_tracks = playlists[p_name]
@@ -550,20 +570,19 @@ def sync_playlists(dryrun):
     return all_tracks
 
 # Syncs the specified track IDs to the device.
-def sync(allTracks, dryrun=False, size=False, synchronous=False, shell_cmds=False):
+def sync(allTracks, dryrun=False, size=False, synchronous=False, shell_cmds=False, limit=None):
     if synchronous:
-        changes = get_changes(allTracks, None, synchronous)
+        changes = get_changes(allTracks, None, synchronous, limit)
         logging.info('%d tracks found' % len(changes))
         track_sync(changes, dryrun, size, shell_cmds, synchronous)
     else:
         changes = Queue()
-        checker = threading.Thread(target=get_changes, args=(allTracks, changes, synchronous))
+        checker = threading.Thread(target=get_changes, args=(allTracks, changes, synchronous, limit))
         checker.start()
-        # Wait for the first queue item
-        item = changes.get(block=True, timeout=None)
-        changes.put(item)
         syncer = threading.Thread(target=track_sync, args=(changes, dryrun, size, shell_cmds, synchronous))
         syncer.start()
+
+        syncer.join()
 
 def main():
     global showSkipped
@@ -580,6 +599,8 @@ def main():
                 help='Run the checker and syncer in the same thread')
     parser.add_argument('--shell-cmds', action='store_true',
                 help='Print the shell commands to perform the track syncing')
+    parser.add_argument('-l', '--limit', type=int)
+    parser.add_argument('--profile', action='store_true')
 
     parser.add_argument("-q", "--quiet", action="store_true",
             help="Minimize output to the console.")
@@ -602,10 +623,25 @@ def main():
 
     showSkipped = args.show_skipped
 
-    # if args.playlistprotocol:
+    now = time.time()
+    if args.profile:
+        pr = cProfile.Profile()
+        pr.enable()
+
     all_tracks = sync_playlists(args.test)
 
-    sync(all_tracks, args.test, args.size, args.synchronous, args.shell_cmds)
-    
+    sync(all_tracks, args.test, args.size, args.synchronous, args.shell_cmds, args.limit)
+
+    if args.profile:
+        pr.disable()
+        for sortby in ('tottime', 'cumtime'):
+            print(f'\n{sortby}:\n\n')
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps.print_stats(50)
+            print(s.getvalue())
+
+    print(f'Done in {time.time() - now:.5} seconds')
+
 if __name__ == '__main__':
     main()

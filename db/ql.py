@@ -137,7 +137,7 @@ class QLDb(MusicDb):
         return sorted(returned_lines.split('\n'))
 
     @classmethod
-    def load_playlists(cls):
+    def load_playlists(cls, names=None):
         """Returns: {playlist_name (string):
                      [QLDb()]}
         """
@@ -152,6 +152,8 @@ class QLDb(MusicDb):
 
         playlists = dict()
         for pl_file in os.listdir(playlists_dir):
+            if names is not None and pl_file not in names:
+                continue
             pl_list = list()
             with open(os.path.join(playlists_dir, pl_file), 'r') as fobj:
                 for line in fobj.readlines():
@@ -160,17 +162,17 @@ class QLDb(MusicDb):
             playlists[pl_file] = pl_list
 
         # Smart playlists
-
         queries_file = os.path.join(lists_dir, 'queries.saved')
         if os.path.isfile(queries_file):
             with open(queries_file, 'r') as fobj:
                 query = fobj.readline().strip()
                 while query != '':
                     name = cur_line = fobj.readline().strip()
-                    pl_list = list()
-                    for line in cls._ql_query(query):
-                        pl_list.append(_from_file(line))
-                    playlists[name] = pl_list
+                    if names is None or name in names:
+                        pl_list = list()
+                        for line in cls._ql_query(query):
+                            pl_list.append(_from_file(line))
+                        playlists[name] = pl_list
                     query = fobj.readline().strip()
 
         return playlists
