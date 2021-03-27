@@ -176,7 +176,7 @@ def get_changes(tracks, changes, synchronous, limit=None):
                     if loc_size != dest_size:
                         action, reason = Action.UPDATE, \
                             f'Sizes do not match: {loc_size/(2 ** 20):.2}MB != {dest_size/(2 ** 20):.2}MB'
-            if action is action.update:
+            if action is Action.UPDATE:
                 updated += 1
         else: # File does not exist on player
             action, reason = Action.SYNC, "Does not exist on player"

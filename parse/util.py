@@ -58,6 +58,7 @@ def convert_to_tracks(info_list, **kwargs):
         if dn != disc_num:
             if disc_num is not None:
                 tracks_per_disc[disc_num] = track_num - 1
+            disc_num = dn
             track_num = 1
         length = parse_time_str(track_info.get('length', 0))
         if length is not None:

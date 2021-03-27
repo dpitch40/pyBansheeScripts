@@ -332,7 +332,8 @@ def parse_vocadb(soup, extra_args):
                       '鏡音リン': 'Kagamine Rin',
                       '鏡音レン': 'Kagamine Len',
                       'さとうささら': 'Satou Sasara',
-                      '闇音レンリ': 'Yamine Renri'}
+                      '闇音レンリ': 'Yamine Renri',
+                      '重音テト': 'Kasane Teto'}
 
     def multireplace(s):
         if s is None:
