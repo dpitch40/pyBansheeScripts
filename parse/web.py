@@ -47,6 +47,7 @@ def download_album_art(url, artist, album):
     if max_dim > config.MaxArtSize:
         w, h = w * config.MaxArtSize // max_dim, h * config.MaxArtSize // max_dim
         art = art.resize((w, h))
+    art = art.convert('RGB')
     dest_dir = os.path.dirname(Metadata({'album': album, 'artist': artist, 'title': 'a'})
         .calculate_fname())
     dest = os.path.join(dest_dir, 'cover.jpg')
