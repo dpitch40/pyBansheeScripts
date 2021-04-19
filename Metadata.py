@@ -181,10 +181,10 @@ def main():
                       args.only_db_fields, args.test)
 
     # If relocating, download album art
-    if source_type == 'web':
-        art_source = args.source
-    elif args.art:
+    if args.art:
         art_source = args.art
+    elif source_type == 'web':
+        art_source = args.source
     else:
         art_source = None
 
