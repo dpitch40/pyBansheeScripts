@@ -340,7 +340,12 @@ def parse_vocadb(soup, extra_args):
                       '鏡音レン': 'Kagamine Len',
                       'さとうささら': 'Satou Sasara',
                       '闇音レンリ': 'Yamine Renri',
-                      '重音テト': 'Kasane Teto'}
+                      '重音テト': 'Kasane Teto',
+                      '雨歌エル': 'Amaga Elu',
+                      '音街ウナ': 'Otomachi Una',
+                      '桃音モモ': 'Monone Momo',
+                      'リリィ': 'Lily',
+                      '心華 日本語版': 'Xin Hua Japanese'}
 
     def multireplace(s):
         if s is None:
@@ -353,42 +358,67 @@ def parse_vocadb(soup, extra_args):
     album, album_artist = list(title.stripped_strings)
     album_artist, _ = re.match(r'^(.+?)(?: feat\. .+)? \(([^\)]+)\)$', album_artist).groups()
     
-    props_table = soup.find('table', class_='properties')
+    props_table = soup.find('div', id='basicInfoTab').find('table')
     props = dict()
     for row in props_table.find_all('tr'):
         field, value = row.find_all('td')
         props[field.string] = ' '.join(value.stripped_strings)
-    year = parse_date_str(props['Release date'].split()[0])
+    date_str = props['Release date'] if 'Release date' in props else props['Published']
+    year = parse_date_str(date_str.split()[0])
 
     tracklist_div = soup.find('div', class_='tracklist')
-    discs = tracklist_div.find_all('ul')
-    if len(discs) == 1:
-        disc_nums = [None]
+    if tracklist_div is None:
+        # Single song
+        d = {'title': props['Name'],
+             'length': parse_time_str(props['Duration']),
+             'year': year}
+        if 'Albums' in props:
+            d['album'] = props['Albums']
+        if 'Vocalists' in props:
+            d['performer'] = multireplace(props['Vocalists'])
+            d['grouping'] = 'Vocaloid'
+
+        return convert_to_tracks([d], artist=album_artist)
     else:
-        disc_nums = range(1, len(discs) + 1)
+        discs = tracklist_div.find_all('ul')
+        if len(discs) == 1:
+            disc_nums = [None]
+        else:
+            disc_nums = range(1, len(discs) + 1)
 
-    track_info = list()
-    for disc_num, l in zip(disc_nums, discs):
-        tracks = l.find_all('li', class_='tracklist-track')
-        for track in tracks:
-            d = {'dn': disc_num}
-            tn = int(track.find('div', class_='tracklist-trackNumber').string)
-            title_div = track.find('div', class_='tracklist-trackTitle')
-            strings = list(title_div.stripped_strings)
-            d['title'], time = strings[:2]
-            artist = multireplace(strings[-1])
-            if ' feat. ' in artist:
-                artist, d['performer'] = artist.split(' feat. ')
-                d['grouping'] = 'Vocaloid'
-            d['length'] = parse_time_str(time.strip('()'))
-            d['artist'] = artist
-            track_info.append(d)
+        track_info = list()
+        for disc_num, l in zip(disc_nums, discs):
+            tracks = l.find_all('li', class_='tracklist-track')
+            for track in tracks:
+                d = {'dn': disc_num}
+                tn = int(track.find('div', class_='tracklist-trackNumber').string)
+                title_div = track.find('div', class_='tracklist-trackTitle')
+                strings = list(title_div.stripped_strings)
+                d['title'] = strings[0]
+                time_str, artist_str = None, None
+                if len(strings) == 2:
+                    if parse_time_str(strings[1]):
+                        time_str = strings[1]
+                    else:
+                        artist_str = strings[1]
+                else:
+                    time_str, artist_str = strings[1], strings[-1]
 
-    kwargs = {'album': multireplace(album),
-              'year': year,
-              'albumartist': multireplace(album_artist)}
-    kwargs.update(extra_args)
-    return convert_to_tracks(track_info, **kwargs)
+                if time_str:
+                    d['length'] = parse_time_str(time_str.strip('()'))
+                if artist_str:
+                    artist = multireplace(artist_str)
+                    if ' feat. ' in artist:
+                        artist, d['performer'] = artist.split(' feat. ')
+                        d['grouping'] = 'Vocaloid'
+                    d['artist'] = artist
+                track_info.append(d)
+
+        kwargs = {'album': multireplace(album),
+                  'year': year,
+                  'albumartist': multireplace(album_artist)}
+        kwargs.update(extra_args)
+        return convert_to_tracks(track_info, **kwargs)
 
 @register_art_downloader('vocadb')
 def download_vocadb_art(soup, extra_args):
