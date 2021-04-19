@@ -15,6 +15,7 @@ import cProfile
 import pstats
 import time
 import io
+import collections
 
 from mfile import open_music_file, mapping as mfile_mapping
 
@@ -83,9 +84,7 @@ def get_changes(tracks, changes, synchronous, limit=None):
                     for t in tracks]
 
     # Check for cover art
-    cover_art_dests = set()
-    art_locs = list()
-    art_dests = list()
+    cover_art_dests = collections.defaultdict(lambda: collections.defaultdict(int))
     for track, dest in zip(tracks, dests):
         if getattr(track, 'singleton', False):
             continue
@@ -106,15 +105,13 @@ def get_changes(tracks, changes, synchronous, limit=None):
                 art_loc = arts[0]
             art_base = os.path.basename(art_loc)
             art_dest = os.path.join(dest_dir, art_base)
-            if art_dest in cover_art_dests:
-                continue
 
-            art_locs.append(art_loc)
-            art_dests.append(art_dest)
+            cover_art_dests[art_dest][art_loc] += 1
 
-            cover_art_dests.add(art_dest)
-
-    dests.extend(art_dests)
+    art_sources = list()
+    for art_dest, art_locs in cover_art_dests.items():
+        art_sources.append(sorted(art_locs.items(), key=operator.itemgetter(1), reverse=True)[0][0])
+        dests.append(art_dest)
 
     # Get list of files currently on player
     on_player = list()
@@ -137,7 +134,7 @@ def get_changes(tracks, changes, synchronous, limit=None):
         put((None, fname, Action.DELETE, None))
 
     synced = updated = 0
-    for track_or_art, dest in zip(itertools.chain(tracks, art_locs), dests):
+    for track_or_art, dest in zip(itertools.chain(tracks, art_sources), dests):
         if stop_event.is_set():
             return
         is_art = isinstance(track_or_art, str)

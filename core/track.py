@@ -60,7 +60,7 @@ class Track(FormattingDictLike):
                 except AttributeError:
                     pass
 
-            return super(Track).__getattr__(key)
+            return super().__getattr__(key)
 
     def to_dict(self, combine=True):
         if True:
