@@ -84,6 +84,12 @@ def parse_ma_tracklist(soup, extra_args):
     kwargs.update(extra_args)
     return convert_to_tracks(track_info, **kwargs)
 
+@register_art_downloader('metal-archives')
+def download_ma_art(soup, extra_args):
+    art = soup.find(id='cover')
+    if art:
+        return art.attrs['href']
+
 @register_parser("allmusic")
 def parse_allmusic_tracklist(soup, extra_args):
     release_date_div = soup.find("div", class_="release-date")
