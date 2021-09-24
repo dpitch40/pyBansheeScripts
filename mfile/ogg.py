@@ -25,26 +25,26 @@ class OggFile(MutagenFile):
     @classmethod
     def create_encoder(self, fname, metadata, bitrate):
         tags = list()
-        for value, arg in [(metadata.title, '-t'),
-                           (metadata.album, '-l'),
-                           (metadata.artist, '-a'),
-                           (metadata.genre, '-G'),
-                           (metadata.year, '-d')]:
+        for value, arg in [(metadata['title'], '-t'),
+                           (metadata['album'], '-l'),
+                           (metadata['artist'], '-a'),
+                           (metadata['genre'], '-G'),
+                           (metadata['year'], '-d')]:
             if value is not None:
                 tags.extend([arg, str(value)])
-        if metadata.tn:
-            tags.extend(['-c', 'tracknumber=%s' % metadata.tn])
-            if metadata.tc:
-                tags.extend(['-c', 'tracktotal=%d' % metadata.tc])
-        if metadata.dn:
-            tags.extend(['-c', 'discnumber=%s' % metadata.dn])
-            if metadata.dc:
-                tags.extend(['-c', 'disctotal=%d' % metadata.dc])
+        if metadata.get('tn', None) is not None:
+            tags.extend(['-c', 'tracknumber=%s' % metadata['tn']])
+            if metadata.get('tc', None) is not None:
+                tags.extend(['-c', 'tracktotal=%d' % metadata['tc']])
+        if metadata.get('dn', None) is not None:
+            tags.extend(['-c', 'discnumber=%s' % metadata['dn']])
+            if metadata.get('dc', None) is not None:
+                tags.extend(['-c', 'disctotal=%d' % metadata['dc']])
         for value, arg in [
-                           (metadata.album_artist, 'ALBUMARTIST')
+                           ('album_artist', 'ALBUMARTIST')
                           ]:
-            if value is not None:
-                tags.extend(['-c', "%s=%s" % (arg, value)])
+            if metadata.get(value, None) is not None:
+                tags.extend(['-c', "%s=%s" % (arg, metadata[value])])
         encoder = subprocess.Popen(["oggenc", '-Q', '-r', '-b', '%d' % bitrate,
                                     '-o', fname,
                                     '--raw-bits=%d' % config.RawBitsPerSample,

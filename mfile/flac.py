@@ -39,16 +39,19 @@ class FlacFile(MutagenFile):
         # Ignores bitrate parameter
         tags = list()
         # See https://www.xiph.org/vorbis/doc/v-comment.html
-        for value, fieldname in [(metadata.title, 'TITLE'),
-                                 (metadata.tn, 'TRACKNUMBER'),
-                                 (metadata.tc, 'TOTALTRACKS'),
-                                 (metadata.dn, 'DISCNUMBER'),
-                                 (metadata.dc, 'TOTALDISCS'),
-                                 (metadata.album, 'ALBUM'),
-                                 (metadata.artist, 'ARTIST'),
-                                 (metadata.genre, 'GENRE'),
-                                 (metadata.year, 'DATE'),
-                                 (metadata.album_artist, 'ALBUMARTIST')]:
+        metadata_list = [(metadata['title'], 'TITLE'),
+                         (metadata['tn'], 'TRACKNUMBER'),
+                         (metadata['tc'], 'TOTALTRACKS'),
+                         (metadata['album'], 'ALBUM'),
+                         (metadata['artist'], 'ARTIST'),
+                         (metadata.get('genre', ''), 'GENRE'),
+                         (metadata['year'], 'DATE'),
+                         (metadata.get('album_artist', ''), 'ALBUMARTIST')]
+        if 'dn' in metadata:
+            metadata_list.append((metadata['dn'], 'DISCNUMBER'))
+        if 'dc' in metadata:
+            metadata_list.append((metadata['dc'], 'TOTALDISCS'))
+        for value, fieldname in metadata_list:
             if value is not None:
                 tags.append('--tag=%s=%s' % (fieldname, value))
         encoder = subprocess.Popen(["flac", '--force-raw-format', '--silent',
