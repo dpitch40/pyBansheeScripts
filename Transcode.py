@@ -52,8 +52,14 @@ def transcode(input_files, oom, bitrate, test):
     matched, unmatched_inputs, unmatched_outputs = match_metadata_to_files(input_files, output_tracks)
 
     matched_inputs, matched_outputs = list(zip(*matched))
+    metadatas = [o.to_dict() for o in matched_outputs]
     sources = list(map(operator.attrgetter('location'), matched_inputs))
-    dests = [getattr(o, 'location', o.calculate_fname()) for o in matched_outputs]
+    dests = list()
+    for o in matched_outputs:
+        if getattr(o, 'location', None) is None or not o.location.startswith(config.MusicDir):
+            dests.append(o.calculate_fname(ext=config.DefaultEncodeExt))
+        else:
+            dests.append(o.location)
     output_dir = os.path.dirname(dests[0])
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
@@ -61,7 +67,7 @@ def transcode(input_files, oom, bitrate, test):
 
     with ProcessPoolExecutor() as executor:
         for (input_track, output_track), fname, dest, _ in \
-            zip(matched, sources, dests, executor.map(convert, sources, dests, matched_outputs,
+            zip(matched, sources, dests, executor.map(convert, sources, dests, metadatas,
                                                       exts, repeat(bitrate), repeat(test))):
 
             if not test:
