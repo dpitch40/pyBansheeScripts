@@ -48,18 +48,23 @@ by rows of track data."""
     return convert_to_tracks(track_info, artist=artist, album=album, year=year, genre=genre,
         extra=extra_args)
 
-def write_simple_tracklist(fname, tracks):
+def write_simple_tracklist(fname, tracks, append=False):
+    mode = 'a' if append else 'w'
     with open(fname, 'w') as f:
         writer = csv.writer(f, delimiter='\t')
-        if tracks[0].genre:
-            metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year, tracks[0].genre]
-        else:
-            metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year]
-        writer.writerow(metadata_row)
+        if not append:
+            if tracks[0].genre:
+                metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year, tracks[0].genre]
+            else:
+                metadata_row = [tracks[0].artist, tracks[0].album, tracks[0].year]
+            writer.writerow(metadata_row)
 
         for track in tracks:
-            mins, secs = divmod(track.length / 1000, 60)
-            length_str = '%d:%02d' % (mins, secs)
+            if track.length is not None:
+                mins, secs = divmod(track.length / 1000, 60)
+                length_str = '%d:%02d' % (mins, secs)
+            else:
+                length_str = '0:00'
             if track.dn:
                 writer.writerow([track.title, length_str, track.dn])
             else:
@@ -80,15 +85,25 @@ def read_tracklist(fname, extra_args):
     return tracks
 
 # Writes a track list to a file
-def write_tracklist(fname, tracks):
+def write_tracklist(fname, tracks, append):
     if fname.lower().endswith('.txt'):
-        return write_simple_tracklist(fname, tracks)
-    columns = [c for c in tracks[0].all_keys if c not in tracklist_exclude_cols]
-    for c in track_list_conditional_exclude_cols:
-        if all(getattr(t, c) is None for t in tracks):
-            columns.remove(c)
-    with open(fname, 'w') as f:
+        return write_simple_tracklist(fname, tracks, append)
+    appending = append and os.path.isfile(fname) and os.path.getsize(fname) > 0
+    if not appending:
+        columns = [c for c in tracks[0].all_keys if c not in tracklist_exclude_cols]
+        for c in track_list_conditional_exclude_cols:
+            if all(getattr(t, c) is None for t in tracks):
+                columns.remove(c)
+    mode = 'a+' if appending else 'w'
+    with open(fname, mode) as f:
+        if appending:
+            f.seek(0, 0)
+            reader = csv.reader(f)
+            columns = reader.__next__()
+            f.seek(0, 2)
+
         writer = csv.DictWriter(f, columns, delimiter='\t' if fname.lower().endswith('.tsv') else ',')
-        writer.writeheader()
+        if not appending:
+            writer.writeheader()
         for track in tracks:
             writer.writerow(dict([(k, to_str_value(v)) for k, v in track.to_dict().items() if k in columns]))
