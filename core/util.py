@@ -187,8 +187,14 @@ def filter_path_elements(elements):
     # Remove forward slashes and leading periods in the path elements
     for i, element in enumerate(elements):
         element = element.replace('/', '_')
+        # Do not let a name start with a period (to avoid appearing hidden)
         if element.startswith('.'):
             element = '_%s' % element[1:]
+        # Do not let a name end with a space or period (Windows restriction)
+        if element.endswith('.'):
+            element = '%s_' % element[:-1]
+        if element.endswith('_'):
+            element = '%s_' % element[:-1]
         elements[i] = element
     return filter_fname(os.path.join(*elements))
 
