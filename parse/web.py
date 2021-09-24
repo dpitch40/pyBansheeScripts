@@ -14,7 +14,8 @@ import config
 # regex for the domain name of a url
 url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.(com|org|net|co\.uk)")
 cd_re = re.compile(r"^CD(\d+)")
-hyphen_artist_re = re.compile(r"^([^\-]+) \- (.+)$")
+hyphen_artist_re = re.compile(r"^(.+)\s+\-\s+(.+)$")
+feat_artist_re = re.compile(r"^(.+)\s+\(?feat\.\s?(.+?)\)?$")
 
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -137,19 +138,24 @@ def parse_bandcamp_tracklist(soup, extra_args):
 
     track_table = soup.find('table', id='track_table')
     if track_table is None:
-        track_info = [(album, None, 0, None)]
+        track_info = [{'title': album, 'artist': None, 'length': 0, 'dn': None}]
     else:
         track_info = list()
         disc_num = None
         for row in track_table.find_all('tr', class_='track_row_view'):
             # TODO: Support multiple discs
-            artist = None
             title = next(row.find('span', class_='track-title').stripped_strings)
+            info = {'artist': None}
             m = hyphen_artist_re.match(title)
             if m:
-                artist, title = m.groups()
-            time = next(row.find('span', class_='time').stripped_strings)
-            track_info.append({'title': title, 'artist': artist, 'length': time, 'dn': disc_num})
+                info['artist'], title = m.groups()
+            else:
+                m = feat_artist_re.match(title)
+                if m:
+                    title, info['performer'] = m.groups()
+            info['time'] = next(row.find('span', class_='time').stripped_strings)
+            info.update({'title': title, 'dn': disc_num})
+            track_info.append(info)
 
     kwargs = {'album': album,
               'year': year,
@@ -164,7 +170,7 @@ def download_bandcamp_art(soup, extra_args):
     # Bonus: download album art
     return soup.find('div', id='tralbumArt').find('a').attrs['href']
 
-def _parse_oldstyle_discogs_tracklist(soup):
+def _parse_oldstyle_discogs_tracklist(soup, extra_args):
     profile = soup.find('div', class_='profile')
     itemprops = profile.find_all('spanitemprop')
     if not itemprops:
@@ -333,52 +339,62 @@ def parse_vgmdb_tracklist(soup, extra_args):
 
 @register_parser('vocadb')
 def parse_vocadb(soup, extra_args):
-    vocaloid_names = {'初音ミク': 'Hatsune Miku',
-                      '巡音ルカ': 'Megurine Luka',
-                      '結月ゆかり': 'Yuzuki Yukari',
-                      '鏡音リン': 'Kagamine Rin',
-                      '鏡音レン': 'Kagamine Len',
-                      'さとうささら': 'Satou Sasara',
-                      '闇音レンリ': 'Yamine Renri',
-                      '重音テト': 'Kasane Teto',
-                      '雨歌エル': 'Amaga Elu',
-                      '音街ウナ': 'Otomachi Una',
-                      '桃音モモ': 'Monone Momo',
-                      'リリィ': 'Lily',
-                      '心華 日本語版': 'Xin Hua Japanese'}
+    vocaloid_names = [('初音ミク', 'Hatsune Miku'),
+                      ('巡音ルカ', 'Megurine Luka'),
+                      ('結月ゆかり', 'Yuzuki Yukari'),
+                      ('鏡音リン', 'Kagamine Rin'),
+                      ('鏡音レン', 'Kagamine Len'),
+                      ('さとうささら', 'Satou Sasara'),
+                      ('闇音レンリ', 'Yamine Renri'),
+                      ('重音テト', 'Kasane Teto'),
+                      ('雨歌エル', 'Amaga Elu'),
+                      ('音街ウナ', 'Otomachi Una'),
+                      ('桃音モモ', 'Monone Momo'),
+                      ('リリィ', 'Lily'),
+                      ('紲星あかり', 'Kizuna Akari'),
+                      ('心華 日本語版', 'Xin Hua Japanese'),
+                      ('心華', 'Xin Hua'),
+                      ('東北きりたん', 'Touhoku Kiritan'),
+                      ('歌愛ユキ', 'Kaai Yuki'),
+                      ('神威がくぽ', 'Kamui Gackpo'),
+                      ('蒼姫ラピス', 'Aoki Lapis'),
+                      ]
 
     def multireplace(s):
         if s is None:
             return s
-        for japanese, english in vocaloid_names.items():
+        for japanese, english in vocaloid_names:
             s = s.replace(japanese, english)
         return s
 
     title = soup.find('h1', class_='page-title')
     album, album_artist = list(title.stripped_strings)
     album_artist, _ = re.match(r'^(.+?)(?: feat\. .+)? \(([^\)]+)\)$', album_artist).groups()
+    album_artist = album_artist.replace('Various artists', 'Various Artists')
     
     props_table = soup.find('div', id='basicInfoTab').find('table')
     props = dict()
     for row in props_table.find_all('tr'):
         field, value = row.find_all('td')
-        props[field.string] = ' '.join(value.stripped_strings)
-    date_str = props['Release date'] if 'Release date' in props else props['Published']
+        props[' '.join(field.stripped_strings)] = (value, ' '.join(value.stripped_strings))
+    date_str = props['Release date'][1] if 'Release date' in props else props['Published'][1]
     year = parse_date_str(date_str.split()[0])
 
     tracklist_div = soup.find('div', class_='tracklist')
     if tracklist_div is None:
         # Single song
-        d = {'title': props['Name'],
-             'length': parse_time_str(props['Duration']),
+        d = {'title': props['Name'][1],
+             'length': parse_time_str(props['Duration'][1]),
              'year': year}
         if 'Albums' in props:
-            d['album'] = props['Albums']
+            d['album'] = props['Albums'][1]
         if 'Vocalists' in props:
-            d['performer'] = multireplace(props['Vocalists'])
+            d['performer'] = ', '.join([multireplace(a.string) for a in props['Vocalists'][0].find_all('a')])
             d['grouping'] = 'Vocaloid'
 
-        return convert_to_tracks([d], artist=album_artist)
+        kwargs = {'artist': album_artist}
+        kwargs.update(extra_args)
+        return convert_to_tracks([d], **kwargs)
     else:
         discs = tracklist_div.find_all('ul')
         if len(discs) == 1:
@@ -401,7 +417,7 @@ def parse_vocadb(soup, extra_args):
                         time_str = strings[1]
                     else:
                         artist_str = strings[1]
-                else:
+                elif len(strings) > 2:
                     time_str, artist_str = strings[1], strings[-1]
 
                 if time_str:

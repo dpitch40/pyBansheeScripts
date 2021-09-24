@@ -38,7 +38,9 @@ def convert_to_tracks(info_list, **kwargs):
        Metadata objects."""
     kwargs = dict([(k, str(v) if isinstance(v, NavigableString) else v) for k, v in kwargs.items()])
     # Fill in artist/album artist
-    album_artist = kwargs.get('albumartist', None) or kwargs['artist']
+    album_artist = kwargs.get('albumartist', None)
+    if album_artist is None:
+        album_artist = kwargs['artist']
     artists = [t.get('artist', None) for t in info_list]
     if any(artists):
         if all([a == album_artist for a in artists]):
