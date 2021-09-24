@@ -93,24 +93,28 @@ def sync_track(source_track, dest_track, copy_none, reloc, only_db_fields, test)
 
     return int(mfile_saved), int(db_saved)
 
-def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, test):
+def copy_metadata(source_tracks, dest_strs, copy_none, reloc, only_db_fields, test, append, apply_):
     extra_dests = list()
     if not dest_strs and reloc:
         sync_tracks(source_tracks, [], copy_none, reloc, only_db_fields, test)
-    for dest_str in dest_strs:
-        dest_tracks, dest_type = parse_metadata_string(dest_str)
-        if dest_type == 'web':
-            raise ValueError('Cannot save tracks to a URL')
-        elif dest_type == 'tracklist':
-            extra_dests.append(dest_str)
-        else:
-            print('---\n%s\n---\n' % dest_str)
-            sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, test)
+    if not dest_strs and apply_:
+        dest_tracks = [Track.from_file(t.location) for t in source_tracks]
+        sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, test)
+    else:
+        for dest_str in dest_strs:
+            dest_tracks, dest_type = parse_metadata_string(dest_str)
+            if dest_type == 'web':
+                raise ValueError('Cannot save tracks to a URL')
+            elif dest_type == 'tracklist':
+                extra_dests.append(dest_str)
+            else:
+                print('---\n%s\n---\n' % dest_str)
+                sync_tracks(source_tracks, dest_tracks, copy_none, reloc, only_db_fields, test)
 
     for dest_str in extra_dests:
         print('---\n%s\n---\n\nSaving tracks' % dest_str)
         if not test:
-            write_tracklist(dest_str, source_tracks)
+            write_tracklist(dest_str, source_tracks, append)
 
 def parse_metadata_string(s, domain=None, extra_args=None):
     if extra_args is None:
@@ -155,6 +159,8 @@ def main():
     parser = argparse.ArgumentParser(description=progDesc)
     parser.add_argument("--reloc", action="store_true",
                         help="Relocate files to standard filenames calculate from metadata.")
+    parser.add_argument("--apply", action="store_true",
+                        help="Apply changes from a metadata source (with location) to matching tracks.")
     parser.add_argument("--only-db-fields", action='store_true',
                         help="Only copy db-specific fields (play count, rating, etc.).")
     parser.add_argument('-c', '--copy-none', action='store_true')
@@ -164,6 +170,7 @@ def main():
                         help="Specify extra data fields for tracks loaded from an external source.")
     parser.add_argument('-d', '--domain', help="Manually set the domain for web parsing")
     parser.add_argument('-a', '--art', help="URL for album artwork")
+    parser.add_argument('--append', action='store_true')
     parser.add_argument("source",
         help="The source to get metadata from (db, files, or a location of a track list).")
     parser.add_argument("dests", nargs='*', help="The files being edited, if any.")
@@ -176,9 +183,13 @@ def main():
     for t in source_tracks:
         print(t.format())
 
-    if len(args.dests) > 0 or args.reloc:
-        copy_metadata(source_tracks, args.dests, args.copy_none, args.reloc,
-                      args.only_db_fields, args.test)
+    if len(args.dests) > 0 or args.reloc or args.apply:
+        if args.apply:
+            dests = None
+        else:
+            dests = args.dests
+        copy_metadata(source_tracks, dests, args.copy_none, args.reloc,
+                      args.only_db_fields, args.test, args.append, args.apply)
 
     # If relocating, download album art
     if args.art:
@@ -191,7 +202,8 @@ def main():
     if art_source and (args.reloc or args.art):
         art_url = get_art_url(art_source)
         if art_url:
-            print(f'Downloading album art from {art_url}')
+            d = os.path.dirname(source_tracks[0].calculate_fname())
+            print(f'Downloading album art from {art_url} to {d}')
             if not args.test:
                 t = source_tracks[0]
                 download_album_art(art_url, t.album_artist_or_artist, t.album)

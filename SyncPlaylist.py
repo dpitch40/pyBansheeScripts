@@ -101,7 +101,7 @@ def main():
     if os.path.exists(p_file):
         quick_sync(p_file, args.destdir, args.flat, args.delete, args.test, args.transcode)
     else:
-        raise NotImplementedError('Need to actually implement this')
+        raise NotImplementedError(f'{p_file} does not exist')
 
 if __name__ == '__main__':
     main()
