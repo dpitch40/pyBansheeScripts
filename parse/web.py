@@ -248,14 +248,14 @@ def _parse_oldstyle_discogs_tracklist(soup, extra_args):
 
 def _parse_newstyle_discogs_tracklist(soup, extra_args):
     # Is it deliberately obfuscated somehow?
-    release_header_div = soup.find(id='release-header')
-    release_header = release_header_div.find('h1')
+    release_header = soup.find("h1", class_=re.compile(r'^title'))
+    release_header_div = release_header.parent
     header_strings = list(release_header.stripped_strings)
     album_artist = header_strings[0]
     album = header_strings[-1]
 
     year = None
-    for d in release_header_div.find_all('div'):
+    for d in release_header_div.find('table').find_all('tr'):
         s = list(d.stripped_strings)
         if s and s[0] == 'Released':
             year = parse_date_str(s[-1])
@@ -292,17 +292,17 @@ def parse_discogs_tracklist(soup, extra_args):
 def parse_vgmdb_tracklist(soup, extra_args):
     album = soup.find('span', class_='albumtitle').string
 
-    info_table = soup.find(id='album_infobit_large')
-
+    # Apparently there can be multiple tables with the same id?
     info = dict()
-    for row in info_table.find_all('tr'):
-        tds = row.find_all('td')
-        if len(tds) == 2:
-            name_td, value_td = row.find_all('td')
-            info[''.join(name_td.stripped_strings)] = ''.join(value_td.stripped_strings)
+    for info_table in soup.find_all(id='album_infobit_large'):
+        for row in info_table.find_all('tr'):
+            tds = row.find_all('td')
+            if len(tds) == 2:
+                name_td, value_td = row.find_all('td')
+                info[''.join(name_td.stripped_strings)] = ''.join(value_td.stripped_strings)
 
     year = parse_date_str(info['Release Date'])
-    artist = ""
+    artist = None
     for key in ("Composed By", "Composer", "Composer/Composer"):
         if key in info:
             artist = re.sub(r'\s*,(\S)', r', \1', info[key])
