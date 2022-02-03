@@ -96,7 +96,7 @@ class Track(FormattingDictLike):
 
     @classmethod
     def from_metadata(cls, metadata, match_to_existing=True, **kwargs):
-        if getattr(metadata, 'location', None):
+        if match_to_existing and getattr(metadata, 'location', None):
             return cls.from_file(metadata.location, **kwargs)
 
         for ext in mfile_mapping.keys():
