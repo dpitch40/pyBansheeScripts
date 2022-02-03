@@ -34,7 +34,7 @@ def convert(infile, outfile, metadata, out_ext, bitrate, test):
             os.remove(outfile)
 
         if decoder is None:
-            encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate, infile=infile)
+            mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate, infile=infile)
         else:
             encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate)
 
