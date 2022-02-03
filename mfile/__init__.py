@@ -4,8 +4,9 @@ from .mp3 import MP3File
 from .ogg import OggFile
 from .flac import FlacFile
 from .m4a import M4AFile
+from .wav import WaveFile
 
-mapping = dict([(f.ext, f) for f in (MP3File, OggFile, FlacFile, M4AFile)])
+mapping = dict([(f.ext, f) for f in (MP3File, OggFile, FlacFile, M4AFile, WaveFile)])
 
 def open_music_file(fname):
     if not os.path.exists(fname):
