@@ -3,6 +3,7 @@ import re
 import os.path
 from io import BytesIO
 import urllib.parse
+from collections import defaultdict
 
 from PIL import Image
 from bs4 import BeautifulSoup
@@ -16,6 +17,10 @@ url_re = re.compile(r"^http(?:s)?://(?:www\.)?(?:[^\.]+\.)*([^\.]+)\.(com|org|ne
 cd_re = re.compile(r"^CD(\d+)")
 hyphen_artist_re = re.compile(r"^(.+)\s+\-\s+(.+)$")
 feat_artist_re = re.compile(r"^(.+)\s+\(?feat\.\s?(.+?)\)?$")
+
+# vgmdb res
+vgmdb_artist_re = re.compile(r'^\- ([\w \-]+)$')
+vgmdb_disc_re = re.compile(r'^Disc (\d+): (.+)$')
 
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -288,6 +293,42 @@ def parse_discogs_tracklist(soup, extra_args):
     else:
         return _parse_newstyle_discogs_tracklist(soup, extra_args)
 
+def _parse_vgmdb_tracknums(s):
+    tracknums = list()
+    for token in s.split():
+        token = token.strip(', ').replace('~', '-')
+        if '-' in token:
+            start, end = token.split('-')
+            tracknums.extend(list(range(int(start), int(end)+1)))
+        else:
+            tracknums.append(int(token))
+    return tracknums
+
+def _parse_vgmdb_notes(text):
+    lines = text.split('\n')
+    notes_dict = defaultdict(lambda: defaultdict(list))
+    current_section = None
+    current_artist = None
+    discnum = None
+    for line in lines:
+        line = line.strip()
+        m = vgmdb_artist_re.match(line)
+        if m:
+            current_artist = m.group(1)
+            continue
+        m = vgmdb_disc_re.match(line)
+        if m:
+            if current_section is None or current_artist is None:
+                print(text, '\n\n', line)
+                breakpoint()
+            discnum = int(m.group(1))
+            for tracknum in _parse_vgmdb_tracknums(m.group(2)):
+                notes_dict[current_section][(discnum, tracknum)].append(current_artist)
+            continue
+        current_section = line
+
+    return notes_dict
+
 @register_parser('vgmdb')
 def parse_vgmdb_tracklist(soup, extra_args):
     album = soup.find('span', class_='albumtitle').string
@@ -302,10 +343,10 @@ def parse_vgmdb_tracklist(soup, extra_args):
                 info[''.join(name_td.stripped_strings)] = ''.join(value_td.stripped_strings)
 
     year = parse_date_str(info['Release Date'])
-    artist = None
+    album_artist = None
     for key in ("Composed By", "Composer", "Composer/Composer"):
         if key in info:
-            artist = re.sub(r'\s*,(\S)', r', \1', info[key])
+            album_artist = re.sub(r'\s*,(\S)', r', \1', info[key])
 
     tracklist_span = soup.find(id="tracklist").find(class_='tl')
     discs = list()
@@ -323,17 +364,28 @@ def parse_vgmdb_tracklist(soup, extra_args):
             disc_tracks.append((title, parse_time_str(time)))
         discs.append(disc_tracks)
 
+    notes = soup.find(id='notes')
+    notes_text = '\n'.join(notes.stripped_strings).strip()
+    parsed_notes = _parse_vgmdb_notes(notes_text)
+    composers_dict = parsed_notes.get("Composition", None)
+
     multiple = len(discs) > 1
     tracklist = list()
     for disc_num, disc_tracks in enumerate(discs):
-        tracklist.extend([{'title': t, 'artist': artist, 'length': time,
-                           'dn': disc_num + 1 if multiple else None}
-                          for t, time in disc_tracks])
+        disc_num += 1
+        for track_num, (t, time) in enumerate(disc_tracks):
+            track_num += 1
+            if composers_dict is not None and (disc_num, track_num) in composers_dict:
+                artist = ', '.join(composers_dict[(disc_num, track_num)])
+            else:
+                artist = album_artist
+            tracklist.append({'title': t, 'artist': artist, 'length': time,
+                              'dn': disc_num if multiple else None})
 
     kwargs = {'album': album,
               'year': year,
               'genre': 'Game Soundtrack',
-              'albumartist': artist}
+              'albumartist': album_artist}
     kwargs.update(extra_args)
     return convert_to_tracks(tracklist, **kwargs)
 
