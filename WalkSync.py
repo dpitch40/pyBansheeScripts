@@ -509,7 +509,7 @@ def sync_playlists(dryrun):
                                                          protocol['base_dir'])
 
                     if p_text:
-                        p_texts[p_dest] = p_text
+                        p_texts[p_dest] = (p_text, protocol.get('encoding', 'utf8'))
 
     # Get list of playlists already on drive
     cur_playlists = list()
@@ -530,14 +530,14 @@ def sync_playlists(dryrun):
     # Playlists to add
     to_sync_texts = list()
     for p_dest in to_sync:
-        text = p_texts[p_dest]
+        text, _ = p_texts[p_dest]
         to_sync_texts.append(text)
         logging.info("Creating playlist\t%s" % p_dest)
 
     # Playlists to update
     for p_dest in common:
-        text = p_texts[p_dest]
-        existing = open(p_dest, 'r').read()
+        text, encoding = p_texts[p_dest]
+        existing = open(p_dest, 'r', encoding=encoding).read()
         if text != existing:
             logging.info("Updating playlist\t%s" % p_dest)
 
@@ -557,8 +557,8 @@ def sync_playlists(dryrun):
             if not os.path.exists(p_dir):
                 os.makedirs(p_dir)
 
-            p_text = p_texts[p_dest]
-            with open(p_dest, 'w') as f:
+            p_text, encoding = p_texts[p_dest]
+            with open(p_dest, 'w', encoding=encoding) as f:
                 f.write(p_text)
 
         for p_dest in to_remove:
