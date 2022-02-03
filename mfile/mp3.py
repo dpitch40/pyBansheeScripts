@@ -43,7 +43,7 @@ class MP3File(MutagenFile):
         raise NotImplementedError
 
     @classmethod
-    def create_encoder(self, fname, metadata, bitrate):
+    def create_encoder(self, fname, metadata, bitrate, infile=None):
         tags = list()
         if metadata.title:
             tags.extend(['--tt', metadata.title])
@@ -74,7 +74,8 @@ class MP3File(MutagenFile):
                                     '--silent',
                                     '--noreplaygain',
                                     '-q', '%d' % config.MP3Qual,
-                                    '-b', '%d' % bitrate] + tags + ['-', fname], stdin=subprocess.PIPE,
+                                    '-b', '%d' % bitrate] + tags +
+                                      ['-' if infile is None else infile, fname], stdin=subprocess.PIPE,
                                     stderr=subprocess.DEVNULL)
         return encoder
 

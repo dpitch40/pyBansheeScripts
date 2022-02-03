@@ -35,7 +35,7 @@ class FlacFile(MutagenFile):
         return decoder
 
     @classmethod
-    def create_encoder(self, fname, metadata, bitrate):
+    def create_encoder(self, fname, metadata, bitrate, infile=None):
         # Ignores bitrate parameter
         tags = list()
         # See https://www.xiph.org/vorbis/doc/v-comment.html
@@ -63,7 +63,7 @@ class FlacFile(MutagenFile):
                                     '--channels=%d' % config.RawChannels,
                                     '--sample-rate=%d' % config.RawSampleRate] +
                                     tags +
-                                    ['-'], stdin=subprocess.PIPE)
+                                    ['-' if infile is None else infile], stdin=subprocess.PIPE)
         return encoder
 
     year = int_descriptor('date')

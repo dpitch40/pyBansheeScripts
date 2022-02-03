@@ -23,7 +23,7 @@ class OggFile(MutagenFile):
         return decoder
 
     @classmethod
-    def create_encoder(self, fname, metadata, bitrate):
+    def create_encoder(self, fname, metadata, bitrate, infile=None):
         tags = list()
         for value, arg in [(metadata['title'], '-t'),
                            (metadata['album'], '-l'),
@@ -51,7 +51,7 @@ class OggFile(MutagenFile):
                                     '--raw-chan=%d' % config.RawChannels,
                                     '--raw-rate=%d' % config.RawSampleRate,
                                     '--raw-endianness', '%d' % (1 if config.RawEndianness == 'big' else 0)] +
-                                    tags + ['-'], stdin=subprocess.PIPE)
+                                    tags + ['-' if infile is None else infile], stdin=subprocess.PIPE)
         return encoder
 
     year = int_descriptor('date')

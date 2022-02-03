@@ -32,10 +32,14 @@ def convert(infile, outfile, metadata, out_ext, bitrate, test):
 
         if os.path.exists(outfile):
             os.remove(outfile)
-        encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate)
 
-        decodedData, errs = decoder.communicate()
-        encoder.communicate(decodedData)
+        if decoder is None:
+            encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate, infile=infile)
+        else:
+            encoder = mfile_mapping[out_ext].create_encoder(outfile, metadata, bitrate)
+
+            decodedData, errs = decoder.communicate()
+            encoder.communicate(decodedData)
 
     return outfile
 
