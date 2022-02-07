@@ -1,4 +1,5 @@
 import subprocess
+import string
 
 from mutagen.oggvorbis import OggVorbis
 
@@ -76,7 +77,12 @@ def main():
     print(ogg.wrapped)
     print(ogg.format())
     print(repr(ogg))
-    print(ogg.calculate_fname())
+    fname = ogg.calculate_fname()
+    print(fname)
+    for c in fname:
+        if c in string.printable:
+            continue
+        print(c, repr(c), '%x' % ord(c), c.encode('utf8'))
     # ogg.save()
 
 if __name__ == '__main__':
