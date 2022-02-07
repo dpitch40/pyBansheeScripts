@@ -44,16 +44,8 @@ base_devices = list()
 for device in config.BaseDevices:
     if device in CONNECTED_DEVICES:
         base_devices.append(device)
-if not base_devices:
-    print("No base device (can be %s) found. Make sure one is connected." %
-          ', '.join(config.BaseDevices))
-    raise SystemExit
-elif len(base_devices) > 1:
-    print("Multiple base devices (can be %s) found. Make sure only one is connected." %
-          ', '.join(config.BaseDevices))
-    raise SystemExit
-else:
-    BASE_DEVICE = base_devices[0]
+
+BASE_DEVICE = None
 
 loc_sizes = dict()
 def getsize(f):
@@ -583,6 +575,7 @@ def sync(allTracks, dryrun=False, size=False, synchronous=False, shell_cmds=Fals
 
 def main():
     global showSkipped
+    global BASE_DEVICE
 
     parser = argparse.ArgumentParser(description="Sync specified playlists to a "
                     "portable music player. (Specify them in config/user.py)")
@@ -617,6 +610,17 @@ def main():
     else:
         debug_level = logging.INFO
     logging.basicConfig(level=debug_level, format='%(levelname)s\t%(message)s')
+
+    if not base_devices:
+        print("No base device (can be %s) found. Make sure one is connected." %
+              ', '.join(config.BaseDevices))
+        raise SystemExit
+    elif len(base_devices) > 1:
+        print("Multiple base devices (can be %s) found. Make sure only one is connected." %
+              ', '.join(config.BaseDevices))
+        raise SystemExit
+    else:
+        BASE_DEVICE = base_devices[0]
 
     showSkipped = args.show_skipped
 
