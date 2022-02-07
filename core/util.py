@@ -12,7 +12,7 @@ from urllib.request import url2pathname, pathname2url
 
 import config
 
-forbidden_fname_chars = ':;\\!?*"<>|'
+forbidden_fname_chars = set(':;\\!?*"<>|')
 xmlEscapedChars = "'"
 
 # Characters to escape when converting to SQL-compatible strings
@@ -162,10 +162,14 @@ def get_sort_char(name):
 
 # Filename escaping/conversion
 
+def is_forbidden_char(c):
+    return c in forbidden_fname_chars or ord(c) >= 0x9000
+
 def filter_fname(f):
     """ "Sanitizes" a filename: replaces forbidden characters and ending periods in directory names"""
 
-    for c in forbidden_fname_chars: # Replace characters in filename
+    forbidden_chars = [c for c in f if is_forbidden_char(c)]
+    for c in forbidden_chars: # Replace characters in filename
         f = f.replace(c, '_')
     dir_name, fname = os.path.split(f)
 
@@ -192,8 +196,6 @@ def filter_path_elements(elements):
             element = '_%s' % element[1:]
         # Do not let a name end with a space or period (Windows restriction)
         if element.endswith('.'):
-            element = '%s_' % element[:-1]
-        if element.endswith('_'):
             element = '%s_' % element[:-1]
         elements[i] = element
     return filter_fname(os.path.join(*elements))
