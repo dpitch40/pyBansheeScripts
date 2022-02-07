@@ -48,13 +48,15 @@ class OggFile(MutagenFile):
                 tags.extend(['-c', "%s=%s" % (arg, metadata[value])])
         func, kwargs, infile = (subprocess.Popen, {"stdin": subprocess.PIPE}, "") \
             if infile is None else subprocess.run, {}, infile
-        encoder = func(["oggenc", '-Q', '-r', '-b', '%d' % bitrate,
-                        '-o', fname,
-                        '--raw-bits=%d' % config.RawBitsPerSample,
-                        '--raw-chan=%d' % config.RawChannels,
-                        '--raw-rate=%d' % config.RawSampleRate,
-                        '--raw-endianness', '%d' % (1 if config.RawEndianness == 'big' else 0)] +
-                        tags + [infile], **kwargs)
+        args = ["oggenc", '-Q', '-b', '%d' % bitrate, '-o', fname]
+        if infile is None:
+            args.extend(['-r',
+                         '--raw-bits=%d' % config.RawBitsPerSample,
+                         '--raw-chan=%d' % config.RawChannels,
+                         '--raw-rate=%d' % config.RawSampleRate,
+                         '--raw-endianness', '%d' % (1 if config.RawEndianness == 'big' else 0)])
+        args.extend(tags + [infile])
+        encoder = func(args, **kwargs)
         return encoder
 
     year = int_descriptor('date')
